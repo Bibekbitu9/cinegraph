@@ -30,6 +30,14 @@ function RecommendationsPage() {
     localStorage.setItem('userCountry', newCountry);
   };
 
+  // SEO optimization
+  useSEO({
+    title: sourceMovie ? `Movies Like ${sourceMovie.title} - Similar Recommendations` : 'Movie Recommendations',
+    description: sourceMovie ? `Discover ${recommendations.length} movies similar to ${sourceMovie.title}. AI-powered recommendations based on genre, theme, and style. Find where to watch in ${userCountry}.` : 'Find similar movies with AI recommendations',
+    image: sourceMovie?.backdrop_path,
+    url: window.location.href
+  });
+
   useEffect(() => {
     const fetchData = async () => {
       try {
