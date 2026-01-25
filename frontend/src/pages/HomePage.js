@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import HeroSearch from '../components/HeroSearch';
 import TrendingSection from '../components/TrendingSection';
+import CountrySelector from '../components/CountrySelector';
 import axios from 'axios';
 import { Film } from 'lucide-react';
 
@@ -10,6 +11,7 @@ const API = `${BACKEND_URL}/api`;
 
 function HomePage() {
   const [userCountry, setUserCountry] = useState('US');
+  const [showCountrySelector, setShowCountrySelector] = useState(false);
 
   useEffect(() => {
     // Detect user's location
