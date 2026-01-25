@@ -172,7 +172,10 @@ def main():
     if tester.failed_tests:
         print(f"\n❌ Failed Tests Details:")
         for test in tester.failed_tests:
-            print(f"   - {test['name']}: {test.get('error', f\"Expected {test.get('expected')}, got {test.get('actual')}\"")}")
+            if 'error' in test:
+                print(f"   - {test['name']}: {test['error']}")
+            else:
+                print(f"   - {test['name']}: Expected {test.get('expected')}, got {test.get('actual')}")
     
     print(f"\n🔑 Note: Most endpoints are expected to return 401 errors due to placeholder TMDB API key")
     print(f"   This is expected behavior and indicates proper error handling.")
