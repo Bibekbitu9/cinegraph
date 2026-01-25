@@ -17,10 +17,17 @@ function TrendingSection({ userCountry }) {
   useEffect(() => {
     const fetchTrending = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const response = await axios.get(`${API}/trending`);
         setTrending(response.data);
       } catch (error) {
         console.error('Failed to fetch trending movies:', error);
+        if (error.response?.status === 401) {
+          setError('TMDB API key not configured. Please add your API key to backend/.env to see trending movies.');
+        } else {
+          setError('Failed to load trending movies. Please try again later.');
+        }
       } finally {
         setLoading(false);
       }
