@@ -28,8 +28,34 @@ function HomePage() {
 
   return (
     <div className="min-h-screen bg-obsidian">
+      {/* Country Selector Modal */}
+      <CountrySelector
+        currentCountry={userCountry}
+        onCountryChange={setUserCountry}
+        isOpen={showCountrySelector}
+        onClose={() => setShowCountrySelector(false)}
+      />
+
       {/* Hero Section */}
       <div className="hero-glow relative min-h-screen flex flex-col items-center justify-center px-6">
+        {/* Country Selector Trigger */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="absolute top-6 right-6"
+        >
+          <button
+            onClick={() => setShowCountrySelector(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all"
+            data-testid="country-selector-trigger"
+          >
+            <span className="text-sm font-dm-sans">
+              {userCountry === 'IN' ? '🇮🇳' : userCountry === 'US' ? '🇺🇸' : userCountry === 'GB' ? '🇬🇧' : '🌍'} {userCountry}
+            </span>
+          </button>
+        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
