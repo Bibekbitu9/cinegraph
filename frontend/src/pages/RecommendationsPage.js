@@ -5,6 +5,7 @@ import axios from 'axios';
 import MovieCard from '../components/MovieCard';
 import MovieDetailModal from '../components/MovieDetailModal';
 import CountrySelector from '../components/CountrySelector';
+import { useSEO } from '../utils/seo';
 import { ArrowLeft, Film } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
