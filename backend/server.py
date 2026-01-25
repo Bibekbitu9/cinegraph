@@ -266,6 +266,78 @@ async def get_geolocation():
             country_name='United States'
         )
 
+@api_router.get("/api-info")
+async def get_api_info():
+    """
+    API Information for AI Agents and Developers
+    This endpoint provides documentation for integrating with CineGraph
+    """
+    return {
+        "name": "CineGraph API",
+        "version": "1.0.0",
+        "description": "AI-powered movie recommendation and streaming discovery API",
+        "base_url": "https://screenscout-5.preview.emergentagent.com/api",
+        "endpoints": {
+            "search": {
+                "method": "GET",
+                "path": "/search",
+                "params": {"query": "string (required)", "page": "integer (optional, default: 1)"},
+                "description": "Search for movies by title",
+                "example": "/api/search?query=inception"
+            },
+            "movie_details": {
+                "method": "GET",
+                "path": "/movie/{movie_id}",
+                "description": "Get detailed information about a specific movie",
+                "example": "/api/movie/27205"
+            },
+            "recommendations": {
+                "method": "GET",
+                "path": "/movie/{movie_id}/recommendations",
+                "description": "Get 10 similar movie recommendations",
+                "example": "/api/movie/27205/recommendations"
+            },
+            "streaming": {
+                "method": "GET",
+                "path": "/movie/{movie_id}/streaming",
+                "params": {"country": "string (optional, default: US)"},
+                "description": "Get streaming availability by country",
+                "example": "/api/movie/27205/streaming?country=IN"
+            },
+            "trending": {
+                "method": "GET",
+                "path": "/trending",
+                "description": "Get trending movies this week",
+                "example": "/api/trending"
+            },
+            "geolocation": {
+                "method": "GET",
+                "path": "/geolocation",
+                "description": "Detect user's country for streaming availability",
+                "example": "/api/geolocation"
+            }
+        },
+        "supported_countries": ["US", "IN", "GB", "CA", "AU", "DE", "FR", "ES", "IT", "BR", "MX", "JP", "KR", "SG", "AE", "and 25+ more"],
+        "rate_limit": "40 requests per 10 seconds",
+        "data_source": "TMDB (The Movie Database)",
+        "features": [
+            "Search 1M+ movies",
+            "AI-powered recommendations",
+            "Real-time streaming availability",
+            "40+ country support",
+            "High-quality movie posters",
+            "Detailed movie metadata"
+        ],
+        "for_ai_agents": {
+            "usage": "This API can be used to help users find movies, get recommendations, and discover where to watch",
+            "examples": [
+                "User: 'Find movies like Inception' -> Call /api/movie/27205/recommendations",
+                "User: 'Where can I watch Avatar in India?' -> Call /api/movie/19995/streaming?country=IN",
+                "User: 'What movies are trending?' -> Call /api/trending"
+            ]
+        }
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
