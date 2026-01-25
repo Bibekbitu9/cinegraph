@@ -19,8 +19,15 @@ function RecommendationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedMovie, setSelectedMovie] = useState(null);
-  const [userCountry, setUserCountry] = useState('US');
+  const [userCountry, setUserCountry] = useState(() => {
+    return localStorage.getItem('userCountry') || 'US';
+  });
   const [showCountrySelector, setShowCountrySelector] = useState(false);
+
+  const handleCountryChange = (newCountry) => {
+    setUserCountry(newCountry);
+    localStorage.setItem('userCountry', newCountry);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
