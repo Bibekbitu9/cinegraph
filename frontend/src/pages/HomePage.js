@@ -42,6 +42,13 @@ function HomePage() {
     localStorage.setItem('userCountry', newCountry);
   };
 
+  // SEO optimization
+  useSEO({
+    title: 'AI-Powered Movie Recommendations & Streaming Guide',
+    description: `Discover your next favorite movie with AI-powered recommendations. Search 1M+ movies and find where to watch on Netflix, Disney+, Prime Video & more in ${userCountry}. Get personalized movie suggestions instantly.`,
+    url: window.location.href
+  });
+
   return (
     <div className="min-h-screen bg-obsidian">
       {/* Country Selector Modal */}
