@@ -185,34 +185,25 @@ async def get_recommendations(movie_id: int):
 @api_router.get("/movie/{movie_id}/streaming", response_model=StreamingAvailability)
 async def get_streaming_availability(movie_id: int, country: str = "US"):
     """Get streaming availability for a movie in a specific country"""
-    try:
-        data = await tmdb_request(f"/movie/{movie_id}/watch/providers")
-        providers_data = data.get('results', {}).get(country.upper(), {})
-        
-        def parse_providers(provider_list):
-            return [
-                StreamingProvider(
-                    provider_id=p['provider_id'],
-                    provider_name=p['provider_name'],
-                    logo_path=get_image_url(p.get('logo_path'), 'w92')
-                )
-                for p in provider_list
-            ]
-        
-        return StreamingAvailability(
-            country=country.upper(),
-            subscription=parse_providers(providers_data.get('flatrate', [])),
-            rent=parse_providers(providers_data.get('rent', [])),
-            buy=parse_providers(providers_data.get('buy', []))
-        )
-    except Exception as e:
-        # Return empty availability if error
-        return StreamingAvailability(
-            country=country.upper(),
-            subscription=[],
-            rent=[],
-            buy=[]
-        )
+    data = await tmdb_request(f"/movie/{movie_id}/watch/providers")
+    providers_data = data.get('results', {}).get(country.upper(), {})
+    
+    def parse_providers(provider_list):
+        return [
+            StreamingProvider(
+                provider_id=p['provider_id'],
+                provider_name=p['provider_name'],
+                logo_path=get_image_url(p.get('logo_path'), 'w92')
+            )
+            for p in provider_list
+        ]
+    
+    return StreamingAvailability(
+        country=country.upper(),
+        subscription=parse_providers(providers_data.get('flatrate', [])),
+        rent=parse_providers(providers_data.get('rent', [])),
+        buy=parse_providers(providers_data.get('buy', []))
+    )
 
 @api_router.get("/trending", response_model=List[MovieSearchResult])
 async def get_trending():
