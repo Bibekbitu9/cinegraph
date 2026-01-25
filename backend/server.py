@@ -190,21 +190,44 @@ async def get_streaming_availability(movie_id: int, country: str = "US"):
     data = await tmdb_request(f"/movie/{movie_id}/watch/providers")
     providers_data = data.get('results', {}).get(country.upper(), {})
     
-    def parse_providers(provider_list):
+    # Provider ID to URL mapping for popular services
+    provider_urls = {
+        8: "https://www.netflix.com/search?q=",  # Netflix
+        337: "https://www.disneyplus.com/search?q=",  # Disney+
+        384: "https://www.hbomax.com/search?q=",  # HBO Max
+        531: "https://www.paramountplus.com/search/?query=",  # Paramount+
+        15: "https://tv.apple.com/search?q=",  # Apple TV+
+        9: "https://www.amazon.com/s?k=",  # Amazon Prime
+        10: "https://www.amazon.com/s?k=",  # Amazon Video
+        2: "https://tv.apple.com/search?q=",  # Apple TV
+        3: "https://play.google.com/store/search?q=",  # Google Play
+        192: "https://www.youtube.com/results?search_query=",  # YouTube
+        386: "https://www.peacocktv.com/search?q=",  # Peacock
+        350: "https://www.apple.com/apple-tv-plus/",  # Apple TV+
+        1899: "https://www.max.com/search?q=",  # Max (HBO Max)
+    }
+    
+    def parse_providers(provider_list, movie_title: str = ""):
         return [
             StreamingProvider(
                 provider_id=p['provider_id'],
                 provider_name=p['provider_name'],
-                logo_path=get_image_url(p.get('logo_path'), 'w92')
+                logo_path=get_image_url(p.get('logo_path'), 'w92'),
+                link=f"{provider_urls.get(p['provider_id'], 'https://www.google.com/search?q=')}{movie_title.replace(' ', '+')}" if movie_title else None
             )
             for p in provider_list
         ]
     
+    # Get movie title for search links
+    movie_data = await tmdb_request(f"/movie/{movie_id}")
+    movie_title = movie_data.get('title', '')
+    
     return StreamingAvailability(
         country=country.upper(),
-        subscription=parse_providers(providers_data.get('flatrate', [])),
-        rent=parse_providers(providers_data.get('rent', [])),
-        buy=parse_providers(providers_data.get('buy', []))
+        subscription=parse_providers(providers_data.get('flatrate', []), movie_title),
+        rent=parse_providers(providers_data.get('rent', []), movie_title),
+        buy=parse_providers(providers_data.get('buy', []), movie_title),
+        tmdb_link=f"https://www.themoviedb.org/movie/{movie_id}/watch?locale={country.upper()}"
     )
 
 @api_router.get("/trending", response_model=List[MovieSearchResult])
