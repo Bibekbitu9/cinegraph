@@ -52,12 +52,14 @@ class StreamingProvider(BaseModel):
     provider_id: int
     provider_name: str
     logo_path: Optional[str] = None
+    link: Optional[str] = None
 
 class StreamingAvailability(BaseModel):
     country: str
     subscription: List[StreamingProvider] = []
     rent: List[StreamingProvider] = []
     buy: List[StreamingProvider] = []
+    tmdb_link: Optional[str] = None
 
 class MovieDetail(BaseModel):
     id: int
