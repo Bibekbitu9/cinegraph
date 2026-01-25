@@ -46,7 +46,7 @@ function HomePage() {
       {/* Country Selector Modal */}
       <CountrySelector
         currentCountry={userCountry}
-        onCountryChange={setUserCountry}
+        onCountryChange={handleCountryChange}
         isOpen={showCountrySelector}
         onClose={() => setShowCountrySelector(false)}
       />
