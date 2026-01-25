@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,10 +6,12 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
-
+import httpx
+import time
+import json
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,52 +21,234 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# TMDB Configuration
+TMDB_API_KEY = os.environ.get('TMDB_API_KEY', 'YOUR_API_KEY_HERE')
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
+IMAGE_BASE_URL = "https://image.tmdb.org/t/p/"
+
+# Simple in-memory cache
+cache = {}
+CACHE_TTL = 3600  # 1 hour
+
 # Create the main app without a prefix
 app = FastAPI()
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
+# HTTP client for TMDB API
+http_client = httpx.AsyncClient(timeout=10.0)
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
+# Models
+class MovieSearchResult(BaseModel):
+    id: int
+    title: str
+    release_date: Optional[str] = None
+    poster_path: Optional[str] = None
+    vote_average: Optional[float] = None
+    overview: Optional[str] = None
+
+class StreamingProvider(BaseModel):
+    provider_id: int
+    provider_name: str
+    logo_path: Optional[str] = None
+
+class StreamingAvailability(BaseModel):
+    country: str
+    subscription: List[StreamingProvider] = []
+    rent: List[StreamingProvider] = []
+    buy: List[StreamingProvider] = []
+
+class MovieDetail(BaseModel):
+    id: int
+    title: str
+    overview: Optional[str] = None
+    release_date: Optional[str] = None
+    vote_average: Optional[float] = None
+    poster_path: Optional[str] = None
+    backdrop_path: Optional[str] = None
+    runtime: Optional[int] = None
+    genres: List[Dict[str, Any]] = []
+    tagline: Optional[str] = None
     
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class GeolocationResponse(BaseModel):
+    country_code: str
+    country_name: str
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+# Helper Functions
+async def tmdb_request(endpoint: str, params: Optional[Dict] = None):
+    """Make a request to TMDB API with caching"""
+    params = params or {}
+    cache_key = f"{endpoint}_{json.dumps(params, sort_keys=True)}"
+    
+    # Check cache
+    if cache_key in cache:
+        cached_data, timestamp = cache[cache_key]
+        if time.time() - timestamp < CACHE_TTL:
+            return cached_data
+    
+    # Make request
+    url = f"{TMDB_BASE_URL}{endpoint}"
+    params['api_key'] = TMDB_API_KEY
+    
+    try:
+        response = await http_client.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Cache the result
+        cache[cache_key] = (data, time.time())
+        return data
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Invalid TMDB API key. Please add your API key to backend/.env")
+        raise HTTPException(status_code=e.response.status_code, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TMDB API error: {str(e)}")
 
-# Add your routes to the router instead of directly to app
+def get_image_url(path: Optional[str], size: str = "w500") -> Optional[str]:
+    """Generate full image URL"""
+    if not path:
+        return None
+    return f"{IMAGE_BASE_URL}{size}{path}"
+
+# API Routes
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "CineGraph API - Movie Recommendation Platform"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
+@api_router.get("/search", response_model=List[MovieSearchResult])
+async def search_movies(query: str = Query(..., min_length=1)):
+    """Search for movies by title with autocomplete"""
+    data = await tmdb_request("/search/movie", {"query": query, "page": 1})
+    results = data.get('results', [])[:10]  # Limit to 10 results
     
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
+    return [
+        MovieSearchResult(
+            id=movie['id'],
+            title=movie.get('title', ''),
+            release_date=movie.get('release_date'),
+            poster_path=get_image_url(movie.get('poster_path'), 'w185'),
+            vote_average=movie.get('vote_average'),
+            overview=movie.get('overview')
+        )
+        for movie in results
+    ]
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
+@api_router.get("/movie/{movie_id}", response_model=MovieDetail)
+async def get_movie_detail(movie_id: int):
+    """Get detailed information about a specific movie"""
+    data = await tmdb_request(f"/movie/{movie_id}", {
+        "append_to_response": "credits,videos,keywords"
+    })
     
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
+    return MovieDetail(
+        id=data['id'],
+        title=data.get('title', ''),
+        overview=data.get('overview'),
+        release_date=data.get('release_date'),
+        vote_average=data.get('vote_average'),
+        poster_path=get_image_url(data.get('poster_path'), 'w500'),
+        backdrop_path=get_image_url(data.get('backdrop_path'), 'w1280'),
+        runtime=data.get('runtime'),
+        genres=data.get('genres', []),
+        tagline=data.get('tagline')
+    )
+
+@api_router.get("/movie/{movie_id}/recommendations", response_model=List[MovieSearchResult])
+async def get_recommendations(movie_id: int):
+    """Get movie recommendations based on a specific movie"""
+    # Try recommendations endpoint first
+    data = await tmdb_request(f"/movie/{movie_id}/recommendations", {"page": 1})
+    results = data.get('results', [])
     
-    return status_checks
+    # If no recommendations, try similar movies
+    if not results:
+        data = await tmdb_request(f"/movie/{movie_id}/similar", {"page": 1})
+        results = data.get('results', [])
+    
+    # Limit to 10 results
+    results = results[:10]
+    
+    return [
+        MovieSearchResult(
+            id=movie['id'],
+            title=movie.get('title', ''),
+            release_date=movie.get('release_date'),
+            poster_path=get_image_url(movie.get('poster_path'), 'w342'),
+            vote_average=movie.get('vote_average'),
+            overview=movie.get('overview')
+        )
+        for movie in results
+    ]
+
+@api_router.get("/movie/{movie_id}/streaming", response_model=StreamingAvailability)
+async def get_streaming_availability(movie_id: int, country: str = "US"):
+    """Get streaming availability for a movie in a specific country"""
+    try:
+        data = await tmdb_request(f"/movie/{movie_id}/watch/providers")
+        providers_data = data.get('results', {}).get(country.upper(), {})
+        
+        def parse_providers(provider_list):
+            return [
+                StreamingProvider(
+                    provider_id=p['provider_id'],
+                    provider_name=p['provider_name'],
+                    logo_path=get_image_url(p.get('logo_path'), 'w92')
+                )
+                for p in provider_list
+            ]
+        
+        return StreamingAvailability(
+            country=country.upper(),
+            subscription=parse_providers(providers_data.get('flatrate', [])),
+            rent=parse_providers(providers_data.get('rent', [])),
+            buy=parse_providers(providers_data.get('buy', []))
+        )
+    except Exception as e:
+        # Return empty availability if error
+        return StreamingAvailability(
+            country=country.upper(),
+            subscription=[],
+            rent=[],
+            buy=[]
+        )
+
+@api_router.get("/trending", response_model=List[MovieSearchResult])
+async def get_trending():
+    """Get trending movies"""
+    data = await tmdb_request("/trending/movie/week")
+    results = data.get('results', [])[:12]
+    
+    return [
+        MovieSearchResult(
+            id=movie['id'],
+            title=movie.get('title', ''),
+            release_date=movie.get('release_date'),
+            poster_path=get_image_url(movie.get('poster_path'), 'w342'),
+            vote_average=movie.get('vote_average'),
+            overview=movie.get('overview')
+        )
+        for movie in results
+    ]
+
+@api_router.get("/geolocation", response_model=GeolocationResponse)
+async def get_geolocation():
+    """Detect user's country via IP geolocation"""
+    try:
+        # Using a free IP geolocation service
+        response = await http_client.get("https://ipapi.co/json/")
+        data = response.json()
+        return GeolocationResponse(
+            country_code=data.get('country_code', 'US'),
+            country_name=data.get('country_name', 'United States')
+        )
+    except Exception:
+        # Default to US if geolocation fails
+        return GeolocationResponse(
+            country_code='US',
+            country_name='United States'
+        )
 
 # Include the router in the main app
 app.include_router(api_router)
@@ -87,3 +271,4 @@ logger = logging.getLogger(__name__)
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+    await http_client.aclose()
