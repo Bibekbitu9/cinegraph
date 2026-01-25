@@ -10,21 +10,36 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 function HomePage() {
-  const [userCountry, setUserCountry] = useState('US');
+  const [userCountry, setUserCountry] = useState(() => {
+    // Try to get saved country from localStorage
+    return localStorage.getItem('userCountry') || 'US';
+  });
   const [showCountrySelector, setShowCountrySelector] = useState(false);
 
   useEffect(() => {
-    // Detect user's location
+    // Detect user's location only if not already set
     const detectLocation = async () => {
+      const savedCountry = localStorage.getItem('userCountry');
+      if (savedCountry) {
+        return; // User has already chosen a country
+      }
+      
       try {
         const response = await axios.get(`${API}/geolocation`);
-        setUserCountry(response.data.country_code);
+        const detectedCountry = response.data.country_code;
+        setUserCountry(detectedCountry);
+        localStorage.setItem('userCountry', detectedCountry);
       } catch (error) {
         console.error('Failed to detect location:', error);
       }
     };
     detectLocation();
   }, []);
+
+  const handleCountryChange = (newCountry) => {
+    setUserCountry(newCountry);
+    localStorage.setItem('userCountry', newCountry);
+  };
 
   return (
     <div className="min-h-screen bg-obsidian">
