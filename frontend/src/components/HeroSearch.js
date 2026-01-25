@@ -31,10 +31,12 @@ function HeroSearch({ userCountry }) {
     const searchMovies = async () => {
       if (query.trim().length < 2) {
         setResults([]);
+        setError(null);
         return;
       }
 
       setLoading(true);
+      setError(null);
       try {
         const response = await axios.get(`${API}/search`, {
           params: { query: query.trim() },
@@ -44,6 +46,12 @@ function HeroSearch({ userCountry }) {
       } catch (error) {
         console.error('Search error:', error);
         setResults([]);
+        if (error.response?.status === 401) {
+          setError('TMDB API key not configured. Please add your API key to backend/.env');
+        } else {
+          setError('Search failed. Please try again.');
+        }
+        setShowResults(true);
       } finally {
         setLoading(false);
       }
