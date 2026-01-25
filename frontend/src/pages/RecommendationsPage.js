@@ -87,6 +87,14 @@ function RecommendationsPage() {
 
   return (
     <div className="min-h-screen bg-obsidian">
+      {/* Country Selector Modal */}
+      <CountrySelector
+        currentCountry={userCountry}
+        onCountryChange={setUserCountry}
+        isOpen={showCountrySelector}
+        onClose={() => setShowCountrySelector(false)}
+      />
+
       {/* Header */}
       <header className="sticky top-0 z-50 glass-panel border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -99,9 +107,20 @@ function RecommendationsPage() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Search
           </Button>
-          <div className="flex items-center gap-2">
-            <Film className="w-6 h-6 text-electric-violet" />
-            <span className="text-xl font-outfit font-bold">CineGraph</span>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowCountrySelector(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all"
+              data-testid="country-selector-trigger"
+            >
+              <span className="text-sm font-dm-sans">
+                {userCountry === 'IN' ? '🇮🇳' : userCountry === 'US' ? '🇺🇸' : userCountry === 'GB' ? '🇬🇧' : '🌍'} {userCountry}
+              </span>
+            </button>
+            <div className="flex items-center gap-2">
+              <Film className="w-6 h-6 text-electric-violet" />
+              <span className="text-xl font-outfit font-bold">CineGraph</span>
+            </div>
           </div>
         </div>
       </header>
