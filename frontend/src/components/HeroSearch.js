@@ -71,6 +71,7 @@ function HeroSearch({ userCountry }) {
     setQuery('');
     setResults([]);
     setShowResults(false);
+    setError(null);
   };
 
   return (
