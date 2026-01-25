@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import HeroSearch from '../components/HeroSearch';
 import TrendingSection from '../components/TrendingSection';
 import CountrySelector from '../components/CountrySelector';
+import { useSEO } from '../utils/seo';
 import axios from 'axios';
 import { Film } from 'lucide-react';
 
