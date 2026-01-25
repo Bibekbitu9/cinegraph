@@ -12,6 +12,7 @@ function HeroSearch({ userCountry }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [error, setError] = useState(null);
   const searchRef = useRef(null);
   const navigate = useNavigate();
 
