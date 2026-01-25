@@ -157,7 +157,20 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                       </div>
 
                       {streaming.subscription.length === 0 && streaming.rent.length === 0 && streaming.buy.length === 0 ? (
-                        <p className="text-white/50 font-dm-sans">No streaming options available in your region.</p>
+                        <div className="glass-panel rounded-xl p-6">
+                          <p className="text-white/50 font-dm-sans mb-4">No streaming options available in your region.</p>
+                          {streaming.tmdb_link && (
+                            <a
+                              href={streaming.tmdb_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-electric-violet hover:text-electric-violet/80 text-sm font-dm-sans transition-colors"
+                            >
+                              View more on TMDB
+                              <PlayCircle className="w-4 h-4" />
+                            </a>
+                          )}
+                        </div>
                       ) : (
                         <div className="space-y-4">
                           {streaming.subscription.length > 0 && (
@@ -165,10 +178,13 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                               <h4 className="text-sm font-outfit font-semibold text-neon-teal mb-2">STREAM</h4>
                               <div className="flex flex-wrap gap-3">
                                 {streaming.subscription.map((provider) => (
-                                  <div
+                                  <a
                                     key={provider.provider_id}
-                                    className="flex items-center gap-2 bg-white/5 rounded-lg p-2"
-                                    title={provider.provider_name}
+                                    href={provider.link || '#'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-all hover:scale-105 cursor-pointer group"
+                                    title={`Watch on ${provider.provider_name}`}
                                   >
                                     {provider.logo_path && (
                                       <img
@@ -177,8 +193,13 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                                         className="w-10 h-10 rounded"
                                       />
                                     )}
-                                    <span className="text-sm font-dm-sans">{provider.provider_name}</span>
-                                  </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-dm-sans">{provider.provider_name}</span>
+                                      <span className="text-xs text-neon-teal opacity-0 group-hover:opacity-100 transition-opacity">
+                                        Click to watch →
+                                      </span>
+                                    </div>
+                                  </a>
                                 ))}
                               </div>
                             </div>
@@ -189,10 +210,13 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                               <h4 className="text-sm font-outfit font-semibold text-electric-violet mb-2">RENT</h4>
                               <div className="flex flex-wrap gap-3">
                                 {streaming.rent.map((provider) => (
-                                  <div
+                                  <a
                                     key={provider.provider_id}
-                                    className="flex items-center gap-2 bg-white/5 rounded-lg p-2"
-                                    title={provider.provider_name}
+                                    href={provider.link || '#'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-all hover:scale-105 cursor-pointer group"
+                                    title={`Rent on ${provider.provider_name}`}
                                   >
                                     {provider.logo_path && (
                                       <img
@@ -201,8 +225,13 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                                         className="w-10 h-10 rounded"
                                       />
                                     )}
-                                    <span className="text-sm font-dm-sans">{provider.provider_name}</span>
-                                  </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-dm-sans">{provider.provider_name}</span>
+                                      <span className="text-xs text-electric-violet opacity-0 group-hover:opacity-100 transition-opacity">
+                                        Click to rent →
+                                      </span>
+                                    </div>
+                                  </a>
                                 ))}
                               </div>
                             </div>
@@ -213,10 +242,13 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                               <h4 className="text-sm font-outfit font-semibold text-cinema-red mb-2">BUY</h4>
                               <div className="flex flex-wrap gap-3">
                                 {streaming.buy.map((provider) => (
-                                  <div
+                                  <a
                                     key={provider.provider_id}
-                                    className="flex items-center gap-2 bg-white/5 rounded-lg p-2"
-                                    title={provider.provider_name}
+                                    href={provider.link || '#'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 rounded-lg p-2 transition-all hover:scale-105 cursor-pointer group"
+                                    title={`Buy on ${provider.provider_name}`}
                                   >
                                     {provider.logo_path && (
                                       <img
@@ -225,10 +257,29 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                                         className="w-10 h-10 rounded"
                                       />
                                     )}
-                                    <span className="text-sm font-dm-sans">{provider.provider_name}</span>
-                                  </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-dm-sans">{provider.provider_name}</span>
+                                      <span className="text-xs text-cinema-red opacity-0 group-hover:opacity-100 transition-opacity">
+                                        Click to buy →
+                                      </span>
+                                    </div>
+                                  </a>
                                 ))}
                               </div>
+                            </div>
+                          )}
+
+                          {streaming.tmdb_link && (
+                            <div className="pt-2 border-t border-white/10">
+                              <a
+                                href={streaming.tmdb_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-white/50 hover:text-white text-sm font-dm-sans transition-colors"
+                              >
+                                View all options on TMDB
+                                <PlayCircle className="w-4 h-4" />
+                              </a>
                             </div>
                           )}
                         </div>
