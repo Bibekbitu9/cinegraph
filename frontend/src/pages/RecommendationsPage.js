@@ -20,6 +20,7 @@ function RecommendationsPage() {
   const [error, setError] = useState(null);
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [userCountry, setUserCountry] = useState('US');
+  const [showCountrySelector, setShowCountrySelector] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
