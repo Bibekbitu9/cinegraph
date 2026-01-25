@@ -159,9 +159,18 @@ function HeroSearch({ userCountry }) {
       )}
 
       {/* No Results */}
-      {showResults && !loading && query.length >= 2 && results.length === 0 && (
+      {showResults && !loading && query.length >= 2 && results.length === 0 && !error && (
         <div className="absolute top-full mt-4 w-full glass-panel rounded-2xl p-4 text-center">
           <p className="text-white/50 font-dm-sans">No movies found. Try a different title.</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {showResults && error && query.length >= 2 && (
+        <div className="absolute top-full mt-4 w-full glass-panel rounded-2xl p-6 text-center">
+          <div className="text-cinema-red mb-2 text-4xl">⚠️</div>
+          <p className="text-white font-dm-sans font-semibold mb-2">Search Error</p>
+          <p className="text-white/60 font-dm-sans text-sm">{error}</p>
         </div>
       )}
     </div>
