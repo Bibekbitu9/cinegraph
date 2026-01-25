@@ -36,7 +36,7 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
     };
 
     fetchMovieDetails();
-  }, [movieId, isOpen, userCountry]);
+  }, [movieId, isOpen, userCountry]); // Added userCountry to dependencies
 
   const handleGetRecommendations = () => {
     onClose();
