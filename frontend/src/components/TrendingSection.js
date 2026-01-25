@@ -11,6 +11,7 @@ const API = `${BACKEND_URL}/api`;
 function TrendingSection({ userCountry }) {
   const [trending, setTrending] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedMovie, setSelectedMovie] = useState(null);
 
   useEffect(() => {
