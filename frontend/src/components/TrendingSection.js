@@ -46,6 +46,35 @@ function TrendingSection({ userCountry }) {
     );
   }
 
+  if (error) {
+    return (
+      <section className="py-20 px-6">
+        <div className="max-w-7xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="flex items-center gap-3 mb-8"
+          >
+            <TrendingUp className="w-8 h-8 text-neon-teal" />
+            <h2 className="text-4xl sm:text-5xl font-outfit font-bold">
+              Trending This Week
+            </h2>
+          </motion.div>
+          <div className="glass-panel rounded-2xl p-8 text-center">
+            <div className="text-cinema-red mb-4 text-5xl">⚠️</div>
+            <h3 className="text-xl font-outfit font-bold mb-2">Unable to Load Trending Movies</h3>
+            <p className="text-white/60 font-dm-sans">{error}</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (trending.length === 0) {
+    return null;
+  }
+
   return (
     <section className="py-20 px-6">
       <div className="max-w-7xl mx-auto">
