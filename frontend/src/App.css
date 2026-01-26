@@ -1,47 +1,123 @@
-/* Minimal App-specific styles - most styling in components */
-
 .App {
+  text-align: center;
+  background-color: #0a0a0a;
+  color: white;
   min-height: 100vh;
-  position: relative;
 }
 
-/* Neon glow effect utility */
-.neon-glow {
-  box-shadow: 0 0 10px rgba(124, 58, 237, 0.3), 0 0 20px rgba(124, 58, 237, 0.1);
+.App-header {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
-/* Glass panel effect */
-.glass-panel {
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+h1 {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(45deg, #7C3AED, #2DD4BF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-/* Hero gradient background */
-.hero-glow {
-  background: radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.15) 0%, rgba(3, 3, 5, 0) 70%);
+.search-form {
+  margin: 2rem 0;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
-/* Card overlay gradient */
-.card-overlay {
-  background: linear-gradient(to top, rgba(3, 3, 5, 0.9) 0%, rgba(3, 3, 5, 0) 100%);
+.search-input {
+  padding: 12px 20px;
+  font-size: 1rem;
+  border: 2px solid #333;
+  border-radius: 25px;
+  background: #1a1a1a;
+  color: white;
+  min-width: 300px;
+  outline: none;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
+.search-input:focus {
+  border-color: #7C3AED;
 }
 
-::-webkit-scrollbar-track {
-  background: #0A0A0C;
+.search-button, .trending-button {
+  padding: 12px 24px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 25px;
+  background: linear-gradient(45deg, #7C3AED, #2DD4BF);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #7C3AED;
-  border-radius: 4px;
+.search-button:hover, .trending-button:hover {
+  transform: translateY(-2px);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #8B5CF6;
+.trending-button {
+  margin: 1rem;
+  background: linear-gradient(45deg, #E11D48, #7C3AED);
+}
+
+.movies-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.movie-card {
+  background: #1a1a1a;
+  border-radius: 15px;
+  padding: 1rem;
+  border: 1px solid #333;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.movie-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(124, 58, 237, 0.3);
+}
+
+.movie-poster {
+  width: 100%;
+  height: 300px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+
+.movie-card h3 {
+  margin: 0.5rem 0;
+  color: #2DD4BF;
+}
+
+.overview {
+  font-size: 0.9rem;
+  color: #ccc;
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .search-form {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .search-input {
+    min-width: 250px;
+  }
+  
+  .movies-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+  
+  h1 {
+    font-size: 2rem;
+  }
 }

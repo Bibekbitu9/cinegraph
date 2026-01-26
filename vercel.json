@@ -25,11 +25,5 @@
   ],
   "env": {
     "TMDB_API_KEY": "472ac4e44f0b0ca278574b175a34ebbd"
-  },
-  "functions": {
-    "backend/api/index.py": {
-      "runtime": "python3.9"
-    }
-  },
-  "buildCommand": "cd frontend && npm install && npm run build"
+  }
 }
