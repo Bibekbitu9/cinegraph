@@ -1,0 +1,16 @@
+{
+  "name": "cinegraph",
+  "version": "1.0.0",
+  "description": "Movie Recommendation Platform",
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "dev": "node scripts/start-dev.js",
+    "verify": "node scripts/verify-setup.js",
+    "build": "cd frontend && npm run build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "keywords": ["movie", "recommendation", "tmdb", "react", "fastapi"],
+  "author": "CineGraph",
+  "license": "MIT"
+}

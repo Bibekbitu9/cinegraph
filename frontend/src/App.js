@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import '@/App.css';
+import './App.css';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Lenis from '@studio-freight/lenis';
 import HomePage from './pages/HomePage';
