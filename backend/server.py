@@ -14,9 +14,14 @@ import asyncio
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# OMDb Configuration
+OMDB_API_KEY = os.environ.get('OMDB_API_KEY')
+OMDB_BASE_URL = "http://www.omdbapi.com"
+
 # TMDB Configuration
 TMDB_API_KEY = os.environ.get('TMDB_API_KEY')
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
+
 
 # Simple in-memory cache
 cache = {}
