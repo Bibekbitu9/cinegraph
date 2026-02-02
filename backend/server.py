@@ -14,9 +14,9 @@ import asyncio
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# OMDb Configuration
-OMDB_API_KEY = os.environ.get('OMDB_API_KEY')
-OMDB_BASE_URL = "http://www.omdbapi.com"
+# TMDB Configuration
+TMDB_API_KEY = os.environ.get('TMDB_API_KEY')
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
 # Simple in-memory cache
 cache = {}
@@ -28,12 +28,12 @@ app = FastAPI()
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# HTTP client for OMDb API
+# HTTP client for OMDb & TMDB APIs
 http_client = httpx.AsyncClient(timeout=10.0)
 
 # Models
 class MovieSearchResult(BaseModel):
-    id: str
+    id: str  # This will remain IMDb ID (tt...)
     title: str
     release_date: Optional[str] = None
     poster_path: Optional[str] = None
@@ -95,22 +95,46 @@ async def omdb_request(params: Dict[str, Any]):
         data = response.json()
         
         if data.get('Response') == 'False':
-            # OMDb returns 200 even for errors like "Movie not found!"
-            # We treat "Movie not found!" as empty result or 404 depending on context
             return data
 
         # Cache the result
         cache[cache_key] = (data, time.time())
         return data
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=str(e))
     except Exception as e:
+        logger.error(f"OMDb API error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"OMDb API error: {str(e)}")
+
+async def tmdb_request(path: str, params: Dict[str, Any] = {}):
+    """Make a request to TMDB API with caching"""
+    if not TMDB_API_KEY:
+        return None  # Fail gracefully if no key
+
+    # Add API key to params
+    params = params.copy()
+    params['api_key'] = TMDB_API_KEY
+    
+    url = f"{TMDB_BASE_URL}{path}"
+    cache_key = f"tmdb_{url}_{json.dumps(params, sort_keys=True)}"
+    
+    if cache_key in cache:
+        cached_data, timestamp = cache[cache_key]
+        if time.time() - timestamp < CACHE_TTL:
+            return cached_data
+            
+    try:
+        response = await http_client.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        cache[cache_key] = (data, time.time())
+        return data
+    except Exception as e:
+        logger.error(f"TMDB API error: {str(e)}")
+        return None
 
 # API Routes
 @api_router.get("/")
 async def root():
-    return {"message": "CineGraph API - Movie Recommendation Platform (OMDb Backend)"}
+    return {"message": "CineGraph API - Movie Recommendation Platform (Hybrid Backend)"}
 
 @api_router.get("/search", response_model=List[MovieSearchResult])
 async def search_movies(query: str = Query(..., min_length=1)):
@@ -123,10 +147,10 @@ async def search_movies(query: str = Query(..., min_length=1)):
         MovieSearchResult(
             id=movie['imdbID'],
             title=movie.get('Title', ''),
-            release_date=movie.get('Year'), # OMDb only gives Year in search
+            release_date=movie.get('Year'),
             poster_path=movie.get('Poster') if movie.get('Poster') != 'N/A' else None,
-            vote_average=None, # Not available in search result
-            overview=None # Not available in search result
+            vote_average=None,
+            overview=None
         )
         for movie in results
     ]
@@ -167,19 +191,51 @@ async def get_movie_detail(movie_id: str):
         release_date=data.get('Released') if data.get('Released') != 'N/A' else data.get('Year'),
         vote_average=vote_average,
         poster_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
-        backdrop_path=data.get('Poster') if data.get('Poster') != 'N/A' else None, # OMDb doesn't have backdrops, reuse poster
+        backdrop_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
         runtime=runtime,
         genres=genres,
-        tagline=data.get('Awards') # Use Awards as tagline substitute or just empty
+        tagline=data.get('Awards')
     )
 
 @api_router.get("/movie/{movie_id}/recommendations", response_model=List[MovieSearchResult])
 async def get_recommendations(movie_id: str):
     """
-    Get dynamic movie recommendations using OMDb title search and genre matching.
+    Get dynamic movie recommendations using TMDB (preferred) or OMDb title search fallback.
     """
     try:
-        # 1. Fetch source movie details to get genre and title
+        # 1. 🌟 Strategy A: Try TMDB Recommendations first
+        if TMDB_API_KEY:
+            # Map IMDb ID -> TMDB ID
+            find_data = await tmdb_request(f"/find/{movie_id}", {"external_source": "imdb_id"})
+            if find_data and find_data.get('movie_results'):
+                tmdb_movie = find_data['movie_results'][0]
+                tmdb_id = tmdb_movie['id']
+                
+                # Fetch recommendations from TMDB
+                rec_data = await tmdb_request(f"/movie/{tmdb_id}/recommendations")
+                if rec_data and rec_data.get('results'):
+                    results = []
+                    # We need to fetch IMDb IDs for these TMDB results to keep consistency
+                    # In a real app we'd map them, but for now we'll fetch details or use TMDB ID
+                    # To keep it simple and fast, we'll fetch external IDs for the top 10
+                    for movie in rec_data['results'][:10]:
+                        ids_data = await tmdb_request(f"/movie/{movie['id']}/external_ids")
+                        imdb_id = ids_data.get('imdb_id') if ids_data else None
+                        
+                        if imdb_id:
+                            results.append(MovieSearchResult(
+                                id=imdb_id,
+                                title=movie.get('title', ''),
+                                release_date=movie.get('release_date', '')[:4],
+                                poster_path=f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
+                                vote_average=movie.get('vote_average'),
+                                overview=movie.get('overview')
+                            ))
+                    
+                    if results:
+                        return results
+
+        # 2. ⚡ Strategy B: Hybrid OMDb Fallback (The previous logic)
         source_data = await omdb_request({"i": movie_id})
         if source_data.get('Response') == 'False':
             return []
@@ -187,16 +243,15 @@ async def get_recommendations(movie_id: str):
         source_title = source_data.get('Title', '')
         source_genres = [g.strip() for g in source_data.get('Genre', '').split(',')]
         
-        results_map = {} # Use dict to avoid duplicates by IMDb ID
+        results_map = {} 
 
-        # 2. Strategy A: Search for related titles (sequels, prequels, remakes)
-        # Take the first 2 words of the title to find related movies
+        # Title Search Strategy
         title_query = " ".join(source_title.split(' ')[:2])
         if title_query:
             search_data = await omdb_request({"s": title_query, "type": "movie"})
             if search_data.get('Response') != 'False':
                 for movie in search_data.get('Search', []):
-                    if movie['imdbID'] != movie_id: # Don't recommend itself
+                    if movie['imdbID'] != movie_id:
                         results_map[movie['imdbID']] = MovieSearchResult(
                             id=movie['imdbID'],
                             title=movie.get('Title', ''),
@@ -206,9 +261,8 @@ async def get_recommendations(movie_id: str):
                             overview=None
                         )
 
-        # 3. Strategy B: Genre-based fallbacks if we need more
+        # Genre Fallback Strategy
         if len(results_map) < 6:
-            # Curated IMDb IDs for major genres
             genre_fallbacks = {
                 "Action": ["tt8178634", "tt12844910", "tt15354916", "tt13751694", "tt0468569"],
                 "Drama": ["tt23849204", "tt15398776", "tt0111161", "tt0068646", "tt0110912"],
@@ -218,47 +272,34 @@ async def get_recommendations(movie_id: str):
                 "Animation": ["tt6718170", "tt1323594", "tt0435625", "tt3104988", "tt0462499"]
             }
 
-            # Gather relevant IDs from source genres
             fallback_ids = []
             for genre in source_genres:
                 if genre in genre_fallbacks:
                     fallback_ids.extend(genre_fallbacks[genre])
             
-            # If no matches, add some default popular ones
             if not fallback_ids:
                 fallback_ids = ["tt0468569", "tt15398776", "tt0111161"]
 
-            # Fetch details for fallback movies (limited to avoid too many requests)
             for imdb_id in list(set(fallback_ids))[:10]:
                 if imdb_id != movie_id and imdb_id not in results_map:
                     try:
                         data = await omdb_request({"i": imdb_id})
                         if data.get('Response') != 'False':
-                            vote_average = None
-                            if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
-                                try: vote_average = float(data['imdbRating'])
-                                except: pass
-                            
                             results_map[imdb_id] = MovieSearchResult(
                                 id=data['imdbID'],
                                 title=data.get('Title', ''),
                                 release_date=data.get('Year'),
                                 poster_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
-                                vote_average=vote_average,
+                                vote_average=float(data['imdbRating']) if data.get('imdbRating') != 'N/A' else None,
                                 overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
                             )
-                    except:
-                        continue
-                    
-                    if len(results_map) >= 8:
-                        break
+                    except: continue
+                    if len(results_map) >= 8: break
 
-        # Return a list of results, max 10
-        final_results = list(results_map.values())[:10]
-        return final_results
+        return list(results_map.values())[:10]
         
     except Exception as e:
-        logger.error(f"Failed to fetch dynamic recommendations: {e}")
+        logger.error(f"Failed to fetch recommendations: {e}")
         return []
 
 @api_router.get("/movie/{movie_id}/streaming", response_model=StreamingAvailability)
