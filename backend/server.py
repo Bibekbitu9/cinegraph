@@ -205,103 +205,173 @@ async def get_movie_detail(movie_id: str):
 @api_router.get("/movie/{movie_id}/recommendations", response_model=List[MovieSearchResult])
 async def get_recommendations(movie_id: str):
     """
-    Get dynamic movie recommendations using TMDB (preferred) or OMDb title search fallback.
+    Get dynamic movie recommendations using TMDB (preferred) or OMDb genre fallback.
     """
     try:
-        # 1. 🌟 Strategy A: Try TMDB Recommendations first
+        logger.info(f"Fetching recommendations for movie_id: {movie_id}")
+        
+        # 1. 🌟 Strategy A: Try TMDB Recommendations first (Language-Aware)
         if TMDB_API_KEY:
+            logger.info("Attempting TMDB recommendation strategy")
             # Map IMDb ID -> TMDB ID
             find_data = await tmdb_request(f"/find/{movie_id}", {"external_source": "imdb_id"})
             if find_data and find_data.get('movie_results'):
                 tmdb_movie = find_data['movie_results'][0]
                 tmdb_id = tmdb_movie['id']
+                logger.info(f"Found TMDB movie ID: {tmdb_id} for {movie_id}")
+                
+                # Get full movie details to extract language
+                movie_details = await tmdb_request(f"/movie/{tmdb_id}")
+                source_language = movie_details.get('original_language', 'en') if movie_details else 'en'
+                logger.info(f"Source movie language: {source_language}")
                 
                 # Fetch recommendations from TMDB
                 rec_data = await tmdb_request(f"/movie/{tmdb_id}/recommendations")
                 if rec_data and rec_data.get('results'):
-                    results = []
-                    # We need to fetch IMDb IDs for these TMDB results to keep consistency
-                    # In a real app we'd map them, but for now we'll fetch details or use TMDB ID
-                    # To keep it simple and fast, we'll fetch external IDs for the top 10
-                    for movie in rec_data['results'][:10]:
+                    logger.info(f"Found {len(rec_data['results'])} recommendations from TMDB")
+                    
+                    # Filter by language first
+                    language_filtered = [
+                        m for m in rec_data['results']
+                        if m.get('original_language') == source_language
+                    ]
+                    
+                    logger.info(f"After language filter: {len(language_filtered)} movies match {source_language}")
+                    
+                    # If we have enough language-matched recommendations, use them
+                    movies_to_process = language_filtered[:10] if len(language_filtered) >= 5 else rec_data['results'][:10]
+                    
+                    # Optimization: Fetch all external IDs in parallel
+                    async def fetch_movie_with_imdb(movie):
                         ids_data = await tmdb_request(f"/movie/{movie['id']}/external_ids")
                         imdb_id = ids_data.get('imdb_id') if ids_data else None
-                        
-                        if imdb_id:
-                            results.append(MovieSearchResult(
+                        if imdb_id and imdb_id != movie_id:
+                            return MovieSearchResult(
                                 id=imdb_id,
                                 title=movie.get('title', ''),
-                                release_date=movie.get('release_date', '')[:4],
+                                release_date=movie.get('release_date', '')[:4] if movie.get('release_date') else None,
                                 poster_path=f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
                                 vote_average=movie.get('vote_average'),
-                                overview=movie.get('overview')
-                            ))
+                                overview=movie.get('overview') or ""
+                            )
+                        return None
+
+                    # Use gather for concurrency
+                    tasks = [fetch_movie_with_imdb(m) for m in movies_to_process]
+                    results_list = await asyncio.gather(*tasks)
+                    
+                    # Filter out None values
+                    results = [r for r in results_list if r]
                     
                     if results:
+                        logger.info(f"Successfully returning {len(results)} TMDB recommendations")
                         return results
+                else:
+                    logger.warning(f"No recommendations found on TMDB for movie: {tmdb_id}")
+            else:
+                logger.warning(f"Could not find TMDB mapping for IMDb ID: {movie_id}")
+        else:
+            logger.warning("TMDB_API_KEY is missing, skipping TMDB strategy")
 
-        # 2. ⚡ Strategy B: Hybrid OMDb Fallback (The previous logic)
+        # 2. ⚡ Strategy B: Language-Aware OMDb Fallback
+        logger.info("Falling back to OMDb logic")
         source_data = await omdb_request({"i": movie_id})
         if source_data.get('Response') == 'False':
             return []
 
-        source_title = source_data.get('Title', '')
+        # Detect language from OMDb data
+        source_language = source_data.get('Language', '').lower()
+        source_country = source_data.get('Country', '').lower()
         source_genres = [g.strip() for g in source_data.get('Genre', '').split(',')]
+        
+        # Determine language category
+        detected_lang = 'en'  # default to English
+        if 'hindi' in source_language or 'india' in source_country:
+            detected_lang = 'hi'
+        elif 'tamil' in source_language:
+            detected_lang = 'ta'
+        elif 'telugu' in source_language:
+            detected_lang = 'te'
+        elif 'kannada' in source_language:
+            detected_lang = 'kn'
+        elif 'malayalam' in source_language:
+            detected_lang = 'ml'
+        
+        logger.info(f"Detected language: {detected_lang} from OMDb data")
         
         results_map = {} 
 
-        # Title Search Strategy
-        title_query = " ".join(source_title.split(' ')[:2])
-        if title_query:
-            search_data = await omdb_request({"s": title_query, "type": "movie"})
-            if search_data.get('Response') != 'False':
-                for movie in search_data.get('Search', []):
-                    if movie['imdbID'] != movie_id:
-                        results_map[movie['imdbID']] = MovieSearchResult(
-                            id=movie['imdbID'],
-                            title=movie.get('Title', ''),
-                            release_date=movie.get('Year'),
-                            poster_path=movie.get('Poster') if movie.get('Poster') != 'N/A' else None,
-                            vote_average=None,
-                            overview=None
-                        )
-
-        # Genre Fallback Strategy
-        if len(results_map) < 6:
-            genre_fallbacks = {
-                "Action": ["tt8178634", "tt12844910", "tt15354916", "tt13751694", "tt0468569"],
-                "Drama": ["tt23849204", "tt15398776", "tt0111161", "tt0068646", "tt0110912"],
-                "Sci-Fi": ["tt15239678", "tt0133093", "tt1375666", "tt0816692", "tt0468569"],
-                "Comedy": ["tt1187043", "tt1517268", "tt0332280", "tt0113243", "tt0081512"],
-                "Crime": ["tt0068646", "tt0110912", "tt0468569", "tt0102926", "tt0114709"],
-                "Animation": ["tt6718170", "tt1323594", "tt0435625", "tt3104988", "tt0462499"]
+        # Language-specific curated pools
+        language_pools = {
+            'hi': {  # Hindi/Bollywood
+                "Action": ["tt8178634", "tt15354916", "tt7019842", "tt13751694", "tt12844910"],  # RRR, Jawan, Pathaan, KGF2, Pushpa
+                "Drama": ["tt1187043", "tt0169102", "tt5074352", "tt2338151", "tt23849204"],  # 3 Idiots, Lagaan, Dangal, PK, 12th Fail
+                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470", "tt2283748"],  # 3 Idiots, Munna Bhai, Andhadhun, Queen, Vicky Donor
+                "Crime": ["tt6148156", "tt1821480", "tt10280296", "tt8108202", "tt7838252"],  # Gangs of Wasseypur, Andhadhun, Sacred Games, Mirzapur, Article 15
+                "Romance": ["tt1039928", "tt0367110", "tt0871510", "tt1954470", "tt0367495"]  # YJHD, Kal Ho Naa Ho, Jab We Met, Queen, DDLJ
+            },
+            'ta': {  # Tamil
+                "Action": ["tt9179430", "tt15097216", "tt9900782", "tt7019842", "tt8178634"],  # Vikram, Leo, Jailer, Pathaan, RRR
+                "Drama": ["tt10189514", "tt8108274", "tt1821480", "tt5074352", "tt0169102"],  # Jai Bhim, Soorarai Pottru, Andhadhun, Dangal, Lagaan
+                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470", "tt2283748"]
+            },
+            'te': {  # Telugu
+                "Action": ["tt8178634", "tt4849438", "tt12844910", "tt7019842", "tt13751694"],  # RRR, Baahubali, Pushpa, Pathaan, KGF2
+                "Drama": ["tt8178634", "tt4849438", "tt5074352", "tt0169102", "tt1187043"],
+                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470", "tt2283748"]
+            },
+            'kn': {  # Kannada
+                "Action": ["tt13751694", "tt12844910", "tt8178634", "tt7019842", "tt15354916"],  # KGF series, RRR, Pathaan, Jawan
+                "Drama": ["tt13751694", "tt5074352", "tt0169102", "tt1187043", "tt2338151"]
+            },
+            'en': {  # English/Hollywood
+                "Action": ["tt0468569", "tt1375666", "tt0816692", "tt4154796", "tt10872600"],  # Dark Knight, Inception, Interstellar, Avengers, Spider-Man
+                "Drama": ["tt0111161", "tt0068646", "tt0110912", "tt0137523", "tt0109830"],  # Shawshank, Godfather, Pulp Fiction, Fight Club, Forrest Gump
+                "Sci-Fi": ["tt0133093", "tt1375666", "tt0816692", "tt0167260", "tt0468569"],  # Matrix, Inception, Interstellar, LOTR, Dark Knight
+                "Comedy": ["tt0332280", "tt0113243", "tt0081505", "tt1201607", "tt0110413"],  # Notebook, Braveheart, Raiders, Harry Potter, Leon
+                "Crime": ["tt0068646", "tt0110912", "tt0468569", "tt0102926", "tt0114709"],  # Godfather, Pulp Fiction, Dark Knight, Silence, Se7en
+                "Animation": ["tt6718170", "tt1323594", "tt0435625", "tt3104988", "tt0462499"]  # Spider-Verse, Toy Story, Ratatouille, Coco, Up
             }
+        }
 
-            fallback_ids = []
-            for genre in source_genres:
-                if genre in genre_fallbacks:
-                    fallback_ids.extend(genre_fallbacks[genre])
-            
-            if not fallback_ids:
-                fallback_ids = ["tt0468569", "tt15398776", "tt0111161"]
+        # Get language-specific pool
+        lang_pool = language_pools.get(detected_lang, language_pools['en'])
+        
+        fallback_ids = []
+        for genre in source_genres:
+            if genre in lang_pool:
+                fallback_ids.extend(lang_pool[genre])
+        
+        # If no genre match, use all movies from the language pool
+        if not fallback_ids:
+            for genre_list in lang_pool.values():
+                fallback_ids.extend(genre_list)
+        
+        # Shuffle IDs to make it feel dynamic
+        import random
+        random.shuffle(fallback_ids)
 
-            for imdb_id in list(set(fallback_ids))[:10]:
-                if imdb_id != movie_id and imdb_id not in results_map:
-                    try:
-                        data = await omdb_request({"i": imdb_id})
-                        if data.get('Response') != 'False':
-                            results_map[imdb_id] = MovieSearchResult(
-                                id=data['imdbID'],
-                                title=data.get('Title', ''),
-                                release_date=data.get('Year'),
-                                poster_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
-                                vote_average=float(data['imdbRating']) if data.get('imdbRating') != 'N/A' else None,
-                                overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
-                            )
-                    except: continue
-                    if len(results_map) >= 8: break
+        if not fallback_ids:
+            fallback_ids = ["tt0468569", "tt15398776", "tt0111161"]
 
-        return list(results_map.values())[:10]
+        for imdb_id in list(set(fallback_ids)):
+            if imdb_id != movie_id and imdb_id not in results_map:
+                try:
+                    data = await omdb_request({"i": imdb_id})
+                    if data.get('Response') != 'False':
+                        results_map[imdb_id] = MovieSearchResult(
+                            id=data['imdbID'],
+                            title=data.get('Title', ''),
+                            release_date=data.get('Year'),
+                            poster_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
+                            vote_average=float(data['imdbRating']) if data.get('imdbRating') != 'N/A' else None,
+                            overview=data.get('Plot') if data.get('Plot') != 'N/A' else ""
+                        )
+                except: continue
+                if len(results_map) >= 10: break
+
+        logger.info(f"Returning {len(results_map)} {detected_lang} language-based recommendations from OMDb")
+        return list(results_map.values())
         
     except Exception as e:
         logger.error(f"Failed to fetch recommendations: {e}")

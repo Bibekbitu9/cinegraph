@@ -5,11 +5,19 @@ import axios from 'axios';
 import MovieCard from '../components/MovieCard';
 import MovieDetailModal from '../components/MovieDetailModal';
 import { useSEO } from '../utils/seo';
-import { ArrowLeft, Film } from 'lucide-react';
+import { ArrowLeft, Film, Star } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+const MovieCardSkeleton = () => (
+  <div className="flex flex-col gap-3">
+    <div className="aspect-[2/3] w-full bg-white/5 animate-pulse rounded-2xl" />
+    <div className="h-4 w-3/4 bg-white/5 animate-pulse rounded" />
+    <div className="h-3 w-1/2 bg-white/5 animate-pulse rounded" />
+  </div>
+);
 
 function RecommendationsPage() {
   const { movieId } = useParams();
@@ -22,8 +30,6 @@ function RecommendationsPage() {
   const [userCountry, setUserCountry] = useState(() => {
     return localStorage.getItem('userCountry') || 'US';
   });
-
-
 
   // SEO optimization
   useSEO({
@@ -39,24 +45,21 @@ function RecommendationsPage() {
         setLoading(true);
         setError(null);
 
-        // Fetch location
-        try {
-          const geoResponse = await axios.get(`${API}/geolocation`);
-          setUserCountry(geoResponse.data.country_code);
-        } catch (err) {
-          console.error('Failed to detect location:', err);
-        }
+        // Fetch location and source movie details in parallel
+        const [geoResponse, movieResponse] = await Promise.all([
+          axios.get(`${API}/geolocation`).catch(() => ({ data: { country_code: 'US' } })),
+          axios.get(`${API}/movie/${movieId}`)
+        ]);
 
-        // Fetch source movie details
-        const movieResponse = await axios.get(`${API}/movie/${movieId}`);
+        setUserCountry(geoResponse.data.country_code);
         setSourceMovie(movieResponse.data);
 
-        // Fetch recommendations
+        // Fetch recommendations - this is the long-running one
         const recsResponse = await axios.get(`${API}/movie/${movieId}/recommendations`);
         setRecommendations(recsResponse.data);
       } catch (err) {
         console.error('Error fetching recommendations:', err);
-        setError(err.response?.data?.detail || 'Failed to load recommendations. Please check if your OMDb API key is configured.');
+        setError(err.response?.data?.detail || 'Failed to load recommendations.');
       } finally {
         setLoading(false);
       }
@@ -64,17 +67,6 @@ function RecommendationsPage() {
 
     fetchData();
   }, [movieId]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-obsidian flex items-center justify-center">
-        <div className="text-center">
-          <Film className="w-16 h-16 text-electric-violet mx-auto mb-4 animate-pulse" />
-          <p className="text-white/60 font-dm-sans">Loading recommendations...</p>
-        </div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -120,41 +112,55 @@ function RecommendationsPage() {
       </header>
 
       {/* Source Movie Banner */}
-      {sourceMovie && (
-        <div className="relative h-80 overflow-hidden">
-          {sourceMovie.backdrop_path && (
-            <img
-              src={sourceMovie.backdrop_path}
-              alt={sourceMovie.title}
-              className="w-full h-full object-cover"
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-obsidian via-obsidian/80 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-8">
-            <div className="max-w-7xl mx-auto">
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-4xl sm:text-5xl font-outfit font-bold mb-2"
-              >
-                Movies like {sourceMovie.title}
-              </motion.h1>
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="text-white/60 font-dm-sans"
-              >
-                {recommendations.length} recommendations based on your selection
-              </motion.p>
+      <div className="relative h-80 overflow-hidden bg-obsidian">
+        {sourceMovie ? (
+          <>
+            {sourceMovie.backdrop_path && (
+              <img
+                src={sourceMovie.backdrop_path}
+                alt={sourceMovie.title}
+                className="w-full h-full object-cover"
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-obsidian via-obsidian/80 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 p-8">
+              <div className="max-w-7xl mx-auto">
+                <motion.h1
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-4xl sm:text-5xl font-outfit font-bold mb-2"
+                >
+                  Movies like {sourceMovie.title}
+                </motion.h1>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1 text-neon-teal">
+                    <Star className="w-4 h-4 fill-current" />
+                    <span className="font-dm-sans font-bold">{sourceMovie.vote_average}</span>
+                  </div>
+                  <p className="text-white/60 font-dm-sans">
+                    {loading ? "Finding recommendations..." : `${recommendations.length} similar movies for you`}
+                  </p>
+                </div>
+              </div>
             </div>
+          </>
+        ) : (
+          <div className="max-w-7xl mx-auto p-8 h-full flex flex-col justify-end">
+            <div className="h-10 w-1/2 bg-white/5 animate-pulse rounded-lg mb-4" />
+            <div className="h-4 w-1/4 bg-white/5 animate-pulse rounded" />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Recommendations Grid */}
       <div className="max-w-7xl mx-auto px-6 py-12">
-        {recommendations.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            {[...Array(10)].map((_, i) => (
+              <MovieCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : recommendations.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-white/60 font-dm-sans text-lg">
               No recommendations found for this movie. Try searching for another title.
