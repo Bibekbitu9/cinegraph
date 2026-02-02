@@ -176,47 +176,90 @@ async def get_movie_detail(movie_id: str):
 @api_router.get("/movie/{movie_id}/recommendations", response_model=List[MovieSearchResult])
 async def get_recommendations(movie_id: str):
     """
-    Get movie recommendations.
-    NOTE: OMDb does not support recommendations. 
-    Fetching actual data from OMDb API for a curated list of classics and Indian hits.
+    Get dynamic movie recommendations using OMDb title search and genre matching.
     """
-    # Curated list of IMDb IDs for classic & Indian movies
-    rec_ids = [
-        "tt1187043",  # 3 Idiots
-        "tt0169102",  # Lagaan
-        "tt5074352",  # Dangal
-        "tt2338151",  # PK
-        "tt8178634",  # RRR
-        "tt0068646",  # The Godfather
-        "tt0468569",  # The Dark Knight
-    ]
-    
-    results = []
-    for imdb_id in rec_ids:
-        try:
-            data = await omdb_request({"i": imdb_id})
+    try:
+        # 1. Fetch source movie details to get genre and title
+        source_data = await omdb_request({"i": movie_id})
+        if source_data.get('Response') == 'False':
+            return []
+
+        source_title = source_data.get('Title', '')
+        source_genres = [g.strip() for g in source_data.get('Genre', '').split(',')]
+        
+        results_map = {} # Use dict to avoid duplicates by IMDb ID
+
+        # 2. Strategy A: Search for related titles (sequels, prequels, remakes)
+        # Take the first 2 words of the title to find related movies
+        title_query = " ".join(source_title.split(' ')[:2])
+        if title_query:
+            search_data = await omdb_request({"s": title_query, "type": "movie"})
+            if search_data.get('Response') != 'False':
+                for movie in search_data.get('Search', []):
+                    if movie['imdbID'] != movie_id: # Don't recommend itself
+                        results_map[movie['imdbID']] = MovieSearchResult(
+                            id=movie['imdbID'],
+                            title=movie.get('Title', ''),
+                            release_date=movie.get('Year'),
+                            poster_path=movie.get('Poster') if movie.get('Poster') != 'N/A' else None,
+                            vote_average=None,
+                            overview=None
+                        )
+
+        # 3. Strategy B: Genre-based fallbacks if we need more
+        if len(results_map) < 6:
+            # Curated IMDb IDs for major genres
+            genre_fallbacks = {
+                "Action": ["tt8178634", "tt12844910", "tt15354916", "tt13751694", "tt0468569"],
+                "Drama": ["tt23849204", "tt15398776", "tt0111161", "tt0068646", "tt0110912"],
+                "Sci-Fi": ["tt15239678", "tt0133093", "tt1375666", "tt0816692", "tt0468569"],
+                "Comedy": ["tt1187043", "tt1517268", "tt0332280", "tt0113243", "tt0081512"],
+                "Crime": ["tt0068646", "tt0110912", "tt0468569", "tt0102926", "tt0114709"],
+                "Animation": ["tt6718170", "tt1323594", "tt0435625", "tt3104988", "tt0462499"]
+            }
+
+            # Gather relevant IDs from source genres
+            fallback_ids = []
+            for genre in source_genres:
+                if genre in genre_fallbacks:
+                    fallback_ids.extend(genre_fallbacks[genre])
             
-            if data.get('Response') != 'False':
-                vote_average = None
-                if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
+            # If no matches, add some default popular ones
+            if not fallback_ids:
+                fallback_ids = ["tt0468569", "tt15398776", "tt0111161"]
+
+            # Fetch details for fallback movies (limited to avoid too many requests)
+            for imdb_id in list(set(fallback_ids))[:10]:
+                if imdb_id != movie_id and imdb_id not in results_map:
                     try:
-                        vote_average = float(data['imdbRating'])
+                        data = await omdb_request({"i": imdb_id})
+                        if data.get('Response') != 'False':
+                            vote_average = None
+                            if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
+                                try: vote_average = float(data['imdbRating'])
+                                except: pass
+                            
+                            results_map[imdb_id] = MovieSearchResult(
+                                id=data['imdbID'],
+                                title=data.get('Title', ''),
+                                release_date=data.get('Year'),
+                                poster_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
+                                vote_average=vote_average,
+                                overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
+                            )
                     except:
-                        pass
-                
-                results.append(MovieSearchResult(
-                    id=data['imdbID'],
-                    title=data.get('Title', ''),
-                    release_date=data.get('Year'),
-                    poster_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
-                    vote_average=vote_average,
-                    overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
-                ))
-        except Exception as e:
-            logger.error(f"Failed to fetch recommendation {imdb_id}: {e}")
-            continue
-    
-    return results
+                        continue
+                    
+                    if len(results_map) >= 8:
+                        break
+
+        # Return a list of results, max 10
+        final_results = list(results_map.values())[:10]
+        return final_results
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch dynamic recommendations: {e}")
+        return []
 
 @api_router.get("/movie/{movie_id}/streaming", response_model=StreamingAvailability)
 async def get_streaming_availability(movie_id: str, country: str = "US"):
