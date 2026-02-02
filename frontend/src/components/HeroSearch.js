@@ -47,7 +47,7 @@ function HeroSearch({ userCountry }) {
         console.error('Search error:', error);
         setResults([]);
         if (error.response?.status === 401) {
-          setError('TMDB API key not configured. Please add your API key to backend/.env');
+          setError('OMDb API key not configured. Please add your API key to backend/.env');
         } else {
           setError('Search failed. Please try again.');
         }

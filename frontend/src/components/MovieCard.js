@@ -1,8 +1,19 @@
+import React from 'react';
 import { motion } from 'framer-motion';
 import { Star, Calendar } from 'lucide-react';
 
 function MovieCard({ movie, onClick }) {
-  const posterUrl = movie.poster_path || 'https://via.placeholder.com/300x450/0A0A0C/7C3AED?text=No+Poster';
+  // Use backend proxy for images to bypass CORS restrictions
+  const proxyUrl = movie.poster_path
+    ? `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api/proxy-image?url=${encodeURIComponent(movie.poster_path)}`
+    : 'https://via.placeholder.com/300x450/0A0A0C/7C3AED?text=No+Poster';
+
+  const [imgSrc, setImgSrc] = React.useState(proxyUrl);
+
+  const handleImageError = () => {
+    setImgSrc(`https://placehold.co/300x450/1a1a1a/FFF?text=${encodeURIComponent(movie.title)}`);
+  };
+
   const releaseYear = movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A';
 
   return (
@@ -10,18 +21,19 @@ function MovieCard({ movie, onClick }) {
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="group relative overflow-hidden rounded-xl bg-charcoal border border-white/5 transition-all duration-500 hover:border-electric-violet/30 hover:shadow-2xl cursor-pointer"
+      className="group relative overflow-hidden rounded-xl glass-panel transition-all duration-500 hover:border-electric-violet/30 hover:shadow-2xl cursor-pointer"
       data-testid={`movie-card-${movie.id}`}
     >
       {/* Movie Poster */}
       <div className="relative aspect-[2/3] overflow-hidden">
         <img
-          src={posterUrl}
+          src={imgSrc}
           alt={movie.title}
+          onError={handleImageError}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 card-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        
+
         {/* Rating Badge */}
         {movie.vote_average > 0 && (
           <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm rounded-full px-2 py-1 flex items-center gap-1">

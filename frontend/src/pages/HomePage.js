@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import HeroSearch from '../components/HeroSearch';
 import TrendingSection from '../components/TrendingSection';
-import CountrySelector from '../components/CountrySelector';
 import { useSEO } from '../utils/seo';
 import axios from 'axios';
 import { Film } from 'lucide-react';
@@ -15,7 +14,6 @@ function HomePage() {
     // Try to get saved country from localStorage
     return localStorage.getItem('userCountry') || 'US';
   });
-  const [showCountrySelector, setShowCountrySelector] = useState(false);
 
   useEffect(() => {
     // Detect user's location only if not already set
@@ -24,7 +22,7 @@ function HomePage() {
       if (savedCountry) {
         return; // User has already chosen a country
       }
-      
+
       try {
         const response = await axios.get(`${API}/geolocation`);
         const detectedCountry = response.data.country_code;
@@ -37,10 +35,7 @@ function HomePage() {
     detectLocation();
   }, []);
 
-  const handleCountryChange = (newCountry) => {
-    setUserCountry(newCountry);
-    localStorage.setItem('userCountry', newCountry);
-  };
+
 
   // SEO optimization
   useSEO({
@@ -51,33 +46,8 @@ function HomePage() {
 
   return (
     <div className="min-h-screen bg-obsidian">
-      {/* Country Selector Modal */}
-      <CountrySelector
-        currentCountry={userCountry}
-        onCountryChange={handleCountryChange}
-        isOpen={showCountrySelector}
-        onClose={() => setShowCountrySelector(false)}
-      />
-
       {/* Hero Section */}
       <div className="hero-glow relative min-h-screen flex flex-col items-center justify-center px-6">
-        {/* Country Selector Trigger */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="absolute top-6 right-6"
-        >
-          <button
-            onClick={() => setShowCountrySelector(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all"
-            data-testid="country-selector-trigger"
-          >
-            <span className="text-sm font-dm-sans">
-              {userCountry === 'IN' ? '🇮🇳' : userCountry === 'US' ? '🇺🇸' : userCountry === 'GB' ? '🇬🇧' : '🌍'} {userCountry}
-            </span>
-          </button>
-        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -113,7 +83,7 @@ function HomePage() {
       <footer className="py-12 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto text-center">
           <p className="text-white/40 text-sm font-dm-sans">
-            Powered by TMDB • Built with ❤️ for movie enthusiasts
+            Powered by OMDb • Built with ❤️ for movie enthusiasts
           </p>
         </div>
       </footer>

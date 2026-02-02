@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import axios from 'axios';
 import MovieCard from '../components/MovieCard';
 import MovieDetailModal from '../components/MovieDetailModal';
-import CountrySelector from '../components/CountrySelector';
 import { useSEO } from '../utils/seo';
 import { ArrowLeft, Film } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -23,12 +22,8 @@ function RecommendationsPage() {
   const [userCountry, setUserCountry] = useState(() => {
     return localStorage.getItem('userCountry') || 'US';
   });
-  const [showCountrySelector, setShowCountrySelector] = useState(false);
 
-  const handleCountryChange = (newCountry) => {
-    setUserCountry(newCountry);
-    localStorage.setItem('userCountry', newCountry);
-  };
+
 
   // SEO optimization
   useSEO({
@@ -61,7 +56,7 @@ function RecommendationsPage() {
         setRecommendations(recsResponse.data);
       } catch (err) {
         console.error('Error fetching recommendations:', err);
-        setError(err.response?.data?.detail || 'Failed to load recommendations. Please check if your TMDB API key is configured.');
+        setError(err.response?.data?.detail || 'Failed to load recommendations. Please check if your OMDb API key is configured.');
       } finally {
         setLoading(false);
       }
@@ -103,14 +98,6 @@ function RecommendationsPage() {
 
   return (
     <div className="min-h-screen bg-obsidian">
-      {/* Country Selector Modal */}
-      <CountrySelector
-        currentCountry={userCountry}
-        onCountryChange={handleCountryChange}
-        isOpen={showCountrySelector}
-        onClose={() => setShowCountrySelector(false)}
-      />
-
       {/* Header */}
       <header className="sticky top-0 z-50 glass-panel border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -124,15 +111,6 @@ function RecommendationsPage() {
             Back to Search
           </Button>
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => setShowCountrySelector(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all"
-              data-testid="country-selector-trigger"
-            >
-              <span className="text-sm font-dm-sans">
-                {userCountry === 'IN' ? '🇮🇳' : userCountry === 'US' ? '🇺🇸' : userCountry === 'GB' ? '🇬🇧' : '🌍'} {userCountry}
-              </span>
-            </button>
             <div className="flex items-center gap-2">
               <Film className="w-6 h-6 text-electric-violet" />
               <span className="text-xl font-outfit font-bold">CineGraph</span>

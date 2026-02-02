@@ -24,7 +24,7 @@ function TrendingSection({ userCountry }) {
       } catch (error) {
         console.error('Failed to fetch trending movies:', error);
         if (error.response?.status === 401) {
-          setError('TMDB API key not configured. Please add your API key to backend/.env to see trending movies.');
+          setError('OMDb API key not configured. Please add your API key to backend/.env to see trending movies.');
         } else {
           setError('Failed to load trending movies. Please try again later.');
         }

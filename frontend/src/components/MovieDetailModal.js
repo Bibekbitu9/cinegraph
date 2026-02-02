@@ -38,6 +38,21 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
     fetchMovieDetails();
   }, [movieId, isOpen, userCountry]); // Added userCountry to dependencies
 
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      // Lock the body scroll
+      document.body.style.overflow = 'hidden';
+      document.body.style.paddingRight = '0px'; // Prevent layout shift
+    }
+
+    return () => {
+      // Restore body scroll
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
+    };
+  }, [isOpen]);
+
   const handleGetRecommendations = () => {
     onClose();
     navigate(`/recommendations/${movieId}`);
@@ -48,14 +63,16 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none"
+        >
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm pointer-events-auto"
             data-testid="modal-backdrop"
           />
 
@@ -65,7 +82,10 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: 'spring', damping: 25 }}
-            className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto glass-panel rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            data-lenis-prevent
+            style={{ overflowY: 'auto' }}
+            className="relative w-full max-w-4xl max-h-[90vh] glass-panel rounded-2xl shadow-2xl pointer-events-auto"
             data-testid="movie-detail-modal"
           >
             {loading ? (
@@ -159,14 +179,14 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                       {streaming.subscription.length === 0 && streaming.rent.length === 0 && streaming.buy.length === 0 ? (
                         <div className="glass-panel rounded-xl p-6">
                           <p className="text-white/50 font-dm-sans mb-4">No streaming options available in your region.</p>
-                          {streaming.tmdb_link && (
+                          {streaming.imdb_link && (
                             <a
-                              href={streaming.tmdb_link}
+                              href={streaming.imdb_link}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-2 text-electric-violet hover:text-electric-violet/80 text-sm font-dm-sans transition-colors"
                             >
-                              View more on TMDB
+                              View more on IMDb
                               <PlayCircle className="w-4 h-4" />
                             </a>
                           )}
@@ -269,15 +289,15 @@ function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
                             </div>
                           )}
 
-                          {streaming.tmdb_link && (
+                          {streaming.imdb_link && (
                             <div className="pt-2 border-t border-white/10">
                               <a
-                                href={streaming.tmdb_link}
+                                href={streaming.imdb_link}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-2 text-white/50 hover:text-white text-sm font-dm-sans transition-colors"
                               >
-                                View all options on TMDB
+                                View on IMDb
                                 <PlayCircle className="w-4 h-4" />
                               </a>
                             </div>
