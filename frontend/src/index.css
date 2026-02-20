@@ -18,7 +18,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #030305;
   color: #ffffff;
+  /* Removed overflow-x: hidden as it breaks native scrolling on iOS Safari */
+}
+
+#root {
   overflow-x: hidden;
+  width: 100%;
 }
 
 code {
@@ -54,6 +59,7 @@ code {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
