@@ -4,7 +4,10 @@ import axios from 'axios';
 import { Search, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+// Use absolute origin dynamically for mobile browser safety, fallback to env for local dev
+const BACKEND_URL = process.env.NODE_ENV === 'production'
+  ? (typeof window !== 'undefined' ? window.location.origin : '')
+  : 'http://localhost:8000';
 const API = `${BACKEND_URL}/api`;
 
 function HeroSearch({ userCountry }) {

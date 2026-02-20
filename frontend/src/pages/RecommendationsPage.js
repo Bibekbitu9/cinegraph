@@ -8,7 +8,10 @@ import { useSEO } from '../utils/seo';
 import { ArrowLeft, Film, Star } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+// Use absolute origin dynamically for mobile browser safety, fallback to env for local dev
+const BACKEND_URL = process.env.NODE_ENV === 'production'
+  ? (typeof window !== 'undefined' ? window.location.origin : '')
+  : 'http://localhost:8000';
 const API = `${BACKEND_URL}/api`;
 
 const MovieCardSkeleton = () => (
