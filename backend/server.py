@@ -20,10 +20,6 @@ load_dotenv(ROOT_DIR / '.env', override=True)
 OMDB_API_KEY = os.environ.get('OMDB_API_KEY')
 OMDB_BASE_URL = "http://www.omdbapi.com"
 
-# TMDB Configuration
-TMDB_API_KEY = os.environ.get('TMDB_API_KEY')
-TMDB_BASE_URL = "https://api.themoviedb.org/3"
-
 # Groq AI Configuration
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
@@ -147,22 +143,41 @@ async def root():
 
 @api_router.get("/search", response_model=List[MovieSearchResult])
 async def search_movies(query: str = Query(..., min_length=1)):
-    """Search for movies by title"""
-    data = await omdb_request({"s": query, "type": "movie"})
-    
-    results = data.get('Search', [])
-    
-    return [
-        MovieSearchResult(
-            id=movie['imdbID'],
-            title=movie.get('Title', ''),
-            release_date=movie.get('Year'),
-            poster_path=movie.get('Poster') if movie.get('Poster') != 'N/A' else None,
-            vote_average=None,
-            overview=None
-        )
-        for movie in results
-    ]
+    """Search for movies by title or theme using Semantic AI Search"""
+    try:
+        if GROQ_API_KEY:
+            client = AsyncOpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
+            prompt = f"User searched for movies related to: '{query}'. Provide the top 10 best matching films in cinematic history. Combine exact matches and strong thematic matches. CRITICAL INSTRUCTION: You MUST respond ONLY with a raw comma-separated list of EXACT IMDb IDs (e.g. tt1234567,tt7654321). No text, no titles, no markdown."
+            chat_completion = await client.chat.completions.create(
+                messages=[{"role": "system", "content": prompt}], model="llama3-8b-8192", temperature=0.5
+            )
+            response_text = chat_completion.choices[0].message.content.strip()
+            ai_imdb_ids = re.findall(r'tt\d+', response_text)
+            
+            if ai_imdb_ids:
+                async def fetch_result(rec_id):
+                    try:
+                        data = await omdb_request({"i": rec_id})
+                        if data.get('Response') != 'False' and data.get('Poster') and data.get('Poster') != 'N/A':
+                            return MovieSearchResult(
+                                id=data['imdbID'],
+                                title=data.get('Title', ''),
+                                release_date=data.get('Year')[:4] if data.get('Year') else None,
+                                poster_path=data.get('Poster'),
+                                vote_average=float(data['imdbRating']) if data.get('imdbRating') and data.get('imdbRating') != 'N/A' else None,
+                                overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
+                            )
+                    except: pass
+                    return None
+                
+                ai_tasks = [fetch_result(rec_id) for rec_id in list(dict.fromkeys(ai_imdb_ids))]
+                results = [r for r in await asyncio.gather(*ai_tasks) if r]
+                if results:
+                    return results[:12]
+    except Exception as e:
+        logger.error(f"Groq AI Search failed: {e}")
+        
+    return []
 
 @api_router.get("/movie/{movie_id}", response_model=MovieDetail)
 async def get_movie_detail(movie_id: str):
@@ -285,171 +300,11 @@ Do NOT include any conversational text, no movies titles, no explanations, no JS
                             if len(valid_results) >= 4:
                                 return valid_results[:10]
             except Exception as e:
-                logger.error(f"Groq AI Recommendations failed, falling back to TMDB/OMDB: {e}")
-
-        # 2. 🌟 Strategy B: Try TMDB Recommendations first (Language-Aware)
-        if TMDB_API_KEY:
-            logger.info("Attempting TMDB recommendation strategy")
-            # Map IMDb ID -> TMDB ID
-            find_data = await tmdb_request(f"/find/{movie_id}", {"external_source": "imdb_id"})
-            if find_data and find_data.get('movie_results'):
-                tmdb_movie = find_data['movie_results'][0]
-                tmdb_id = tmdb_movie['id']
-                logger.info(f"Found TMDB movie ID: {tmdb_id} for {movie_id}")
-                
-                # Get full movie details to extract language
-                movie_details = await tmdb_request(f"/movie/{tmdb_id}")
-                source_language = movie_details.get('original_language', 'en') if movie_details else 'en'
-                logger.info(f"Source movie language: {source_language}")
-                
-                # Fetch recommendations from TMDB
-                rec_data = await tmdb_request(f"/movie/{tmdb_id}/recommendations")
-                if rec_data and rec_data.get('results'):
-                    logger.info(f"Found {len(rec_data['results'])} recommendations from TMDB")
-                    
-                    # Filter by language first
-                    language_filtered = [
-                        m for m in rec_data['results']
-                        if m.get('original_language') == source_language
-                    ]
-                    
-                    logger.info(f"After language filter: {len(language_filtered)} movies match {source_language}")
-                    
-                    # If we have enough language-matched recommendations, use them
-                    movies_to_process = language_filtered[:10] if len(language_filtered) >= 5 else rec_data['results'][:10]
-                    
-                    # Optimization: Fetch all external IDs in parallel
-                    async def fetch_movie_with_imdb(movie):
-                        ids_data = await tmdb_request(f"/movie/{movie['id']}/external_ids")
-                        imdb_id = ids_data.get('imdb_id') if ids_data else None
-                        if imdb_id and imdb_id != movie_id:
-                            return MovieSearchResult(
-                                id=imdb_id,
-                                title=movie.get('title', ''),
-                                release_date=movie.get('release_date', '')[:4] if movie.get('release_date') else None,
-                                poster_path=f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
-                                vote_average=movie.get('vote_average'),
-                                overview=movie.get('overview') or ""
-                            )
-                        return None
-
-                    # Use gather for concurrency
-                    tasks = [fetch_movie_with_imdb(m) for m in movies_to_process]
-                    results_list = await asyncio.gather(*tasks)
-                    
-                    # Filter out None values
-                    results = [r for r in results_list if r]
-                    
-                    if results:
-                        logger.info(f"Successfully returning {len(results)} TMDB recommendations")
-                        return results
-                else:
-                    logger.warning(f"No recommendations found on TMDB for movie: {tmdb_id}")
-            else:
-                logger.warning(f"Could not find TMDB mapping for IMDb ID: {movie_id}")
-        else:
-            logger.warning("TMDB_API_KEY is missing, skipping TMDB strategy")
-
-        # 2. ⚡ Strategy B: Language-Aware OMDb Fallback
-        logger.info("Falling back to OMDb logic")
-        source_data = await omdb_request({"i": movie_id})
-        if source_data.get('Response') == 'False':
-            return []
-
-        # Detect language from OMDb data
-        source_language = source_data.get('Language', '').lower()
-        source_country = source_data.get('Country', '').lower()
-        source_genres = [g.strip() for g in source_data.get('Genre', '').split(',')]
+                logger.error(f"Groq AI Recommendations failed: {e}")
+                return []
         
-        # Determine language category
-        detected_lang = 'en'  # default to English
-        if 'hindi' in source_language or 'india' in source_country:
-            detected_lang = 'hi'
-        elif 'tamil' in source_language:
-            detected_lang = 'ta'
-        elif 'telugu' in source_language:
-            detected_lang = 'te'
-        elif 'kannada' in source_language:
-            detected_lang = 'kn'
-        elif 'malayalam' in source_language:
-            detected_lang = 'ml'
-        
-        logger.info(f"Detected language: {detected_lang} from OMDb data")
-        
-        results_map = {} 
-
-        # Language-specific curated pools
-        language_pools = {
-            'hi': {  # Hindi/Bollywood
-                "Action": ["tt8178634", "tt15354916", "tt7019842", "tt13751694", "tt12844910", "tt29598642"],  # Fighter etc
-                "Drama": ["tt1187043", "tt0169102", "tt5074352", "tt2338151", "tt23849204", "tt10366206"],  
-                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470", "tt2283748"],
-                "Crime": ["tt6148156", "tt1821480", "tt10280296", "tt8108202", "tt7838252"],
-                "Romance": ["tt1039928", "tt0367110", "tt0871510", "tt1954470", "tt26047818"] 
-            },
-            'ta': {  # Tamil
-                "Action": ["tt9179430", "tt15097216", "tt9900782", "tt7019842", "tt8178634"],  
-                "Drama": ["tt10189514", "tt8108274", "tt1821480", "tt5074352", "tt0169102"],  
-                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470"]
-            },
-            'te': {  # Telugu
-                "Action": ["tt8178634", "tt4849438", "tt12844910", "tt7019842", "tt13751694"],  
-                "Drama": ["tt8178634", "tt4849438", "tt5074352", "tt0169102", "tt1187043"],
-                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470"]
-            },
-            'kn': {  # Kannada
-                "Action": ["tt13751694", "tt12844910", "tt8178634", "tt7019842", "tt15354916"],  
-                "Drama": ["tt13751694", "tt5074352", "tt0169102", "tt1187043", "tt2338151"]
-            },
-            'en': {  # English/Hollywood
-                "Action": ["tt1745960", "tt10366206", "tt9603212", "tt1877830", "tt15398776", "tt0468569", "tt1375666", "tt4154796", "tt10872600"],  # Top Gun, John Wick 4, MI7, The Batman, Oppenheimer...
-                "Drama": ["tt15398776", "tt5537002", "tt13238346", "tt13833688", "tt0111161", "tt0068646", "tt0110912", "tt0137523", "tt0109830"],  # Oppenheimer, Killers of the Flower Moon, Past Lives, The Whale...
-                "Sci-Fi": ["tt15239678", "tt1630029", "tt11858890", "tt23289160", "tt0133093", "tt1375666", "tt0816692", "tt0167260"],  # Dune 2, Avatar 2, The Creator, Godzilla Minus One...
-                "Comedy": ["tt1517268", "tt14230458", "tt26047818", "tt11564570", "tt0332280", "tt0081505", "tt1201607"],  # Barbie, Poor Things, Anyone But You, Glass Onion...
-                "Crime": ["tt1877830", "tt0068646", "tt0110912", "tt0468569", "tt0102926", "tt0114709"],  # The Batman, Godfather, Pulp Fiction...
-                "Animation": ["tt3104988", "tt9362722", "tt6718170", "tt1323594", "tt0435625", "tt0462499", "tt11145118"]  # Inside Out 2, Spider-Verse 2, Spider-Verse 1, Toy Story...
-            }
-        }
-
-        # Get language-specific pool
-        lang_pool = language_pools.get(detected_lang, language_pools['en'])
-        
-        fallback_ids = []
-        for genre in source_genres:
-            if genre in lang_pool:
-                fallback_ids.extend(lang_pool[genre])
-        
-        # If no genre match, use all movies from the language pool
-        if not fallback_ids:
-            for genre_list in lang_pool.values():
-                fallback_ids.extend(genre_list)
-        
-        # Shuffle IDs to make it feel dynamic
-        import random
-        random.shuffle(fallback_ids)
-
-        if not fallback_ids:
-            fallback_ids = ["tt0468569", "tt15398776", "tt0111161"]
-
-        for imdb_id in list(set(fallback_ids)):
-            if imdb_id != movie_id and imdb_id not in results_map:
-                try:
-                    data = await omdb_request({"i": imdb_id})
-                    if data.get('Response') != 'False':
-                        results_map[imdb_id] = MovieSearchResult(
-                            id=data['imdbID'],
-                            title=data.get('Title', ''),
-                            release_date=data.get('Year'),
-                            poster_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
-                            vote_average=float(data['imdbRating']) if data.get('imdbRating') != 'N/A' else None,
-                            overview=data.get('Plot') if data.get('Plot') != 'N/A' else ""
-                        )
-                except: continue
-                if len(results_map) >= 12: break
-
-        logger.info(f"Returning {len(results_map)} {detected_lang} language-based recommendations from OMDb")
-        return list(results_map.values())
-        
+        logger.warning("GROQ_API_KEY is missing. Cannot fetch recommendations.")
+        return []
     except Exception as e:
         logger.error(f"Failed to fetch recommendations: {e}")
         return []
@@ -527,115 +382,11 @@ Do NOT include any text, titles, or explanations. Just the raw comma-separated I
                 if len(valid_results) >= 5:
                     return valid_results[:10]
     except Exception as e:
-        logger.error(f"Groq AI Trending failed, falling back to TMDB: {e}")
+        logger.error(f"Groq AI Trending failed: {e}")
+        return []
 
-    try:
-        # 2. 🌟 Strategy B: TMDB Trending Endpoint
-        if TMDB_API_KEY:
-            logger.info("Fetching trending movies from TMDB")
-            trending_data = await tmdb_request("/trending/movie/day")
-            
-            if trending_data and trending_data.get('results'):
-                movies_to_process = trending_data['results'][:12]
-                
-                async def fetch_movie_with_imdb(movie):
-                    ids_data = await tmdb_request(f"/movie/{movie['id']}/external_ids")
-                    imdb_id = ids_data.get('imdb_id') if ids_data else None
-                    if imdb_id:
-                        return MovieSearchResult(
-                            id=imdb_id,
-                            title=movie.get('title', ''),
-                            release_date=movie.get('release_date', '')[:4] if movie.get('release_date') else None,
-                            poster_path=f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
-                            vote_average=movie.get('vote_average'),
-                            overview=movie.get('overview') or ""
-                        )
-                    return None
-
-                tasks = [fetch_movie_with_imdb(m) for m in movies_to_process]
-                results_list = await asyncio.gather(*tasks)
-                results = [r for r in results_list if r]
-                
-                if results:
-                    return results
-
-    except Exception as e:
-        logger.error(f"TMDB Trending failed, falling back to iTunes RSS: {e}")
-
-    # 2. ⚡ Strategy B: Real-Time iTunes Top Movies RSS API (No API Key Required)
-    try:
-        logger.info("Fetching real-time top movies from iTunes RSS")
-        response = await http_client.get("https://itunes.apple.com/us/rss/topmovies/limit=25/json", timeout=5.0)
-        if response.status_code == 200:
-            itunes_data = response.json()
-            entries = itunes_data.get('feed', {}).get('entry', [])
-            titles = [entry.get('im:name', {}).get('label') for entry in entries if entry.get('im:name')]
-            
-            async def fetch_movie_with_omdb(title):
-                try:
-                    data = await omdb_request({"t": title})
-                    if data and data.get('Response') != 'False' and data.get('Poster') and data.get('Poster') != 'N/A':
-                        vote_average = None
-                        if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
-                            try: vote_average = float(data['imdbRating'])
-                            except: pass
-                        return MovieSearchResult(
-                            id=data['imdbID'],
-                            title=data.get('Title', title),
-                            release_date=data.get('Year')[:4] if data.get('Year') else None,
-                            poster_path=data.get('Poster'),
-                            vote_average=vote_average,
-                            overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
-                        )
-                except Exception:
-                    pass
-                return None
-            
-            tasks = [fetch_movie_with_omdb(title) for title in titles]
-            results_list = await asyncio.gather(*tasks)
-            results = [r for r in results_list if r]
-            
-            if len(results) >= 4:
-                import random
-                # Slightly randomize the top hits to keep the site feeling dynamic
-                random.shuffle(results)
-                return results[:10]
-    except Exception as e:
-        logger.error(f"iTunes RSS scrape failed, falling back to static pool: {e}")
-
-    # 3. ⚡ Strategy C: Randomized OMDb Fallback Pool (Recent 2023-2024 Global & Indian hits)
-    import random
-    all_movie_ids = [
-        "tt15239678", "tt15398776", "tt1517268", "tt11145118", "tt10366206", "tt9603212", # Dune 2, Oppenheimer, Barbie, Inside Out 2, John Wick 4, MI7
-        "tt1630029", "tt9362722", "tt14230458", "tt11858890", "tt23289160", "tt15354916", # Avatar 2, Spider-Verse 2, Poor Things, Creator, Godzilla Minus One, Jawan
-        "tt12844910", "tt13751694", "tt23849204", "tt29598642", "tt10872600", "tt1745960", # Pathaan, Animal, 12th Fail, Fighter, No Way Home, Top Gun Maverick
-        "tt11564570", "tt26047818", "tt5537002", "tt13238346", "tt13833688", "tt10189514"  # Glass Onion, Anyone But You, Killers Flower Moon, Past Lives, The Whale, Jai Bhim
-    ]
-    
-    selected_ids = random.sample(all_movie_ids, 8)
-    
-    results = []
-    for imdb_id in selected_ids:
-        try:
-            data = await omdb_request({"i": imdb_id})
-            if data.get('Response') != 'False':
-                vote_average = None
-                if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
-                    try: vote_average = float(data['imdbRating'])
-                    except: pass
-                
-                results.append(MovieSearchResult(
-                    id=data['imdbID'],
-                    title=data.get('Title', ''),
-                    release_date=data.get('Year'),
-                    poster_path=data.get('Poster') if data.get('Poster') != 'N/A' else None,
-                    vote_average=vote_average,
-                    overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
-                ))
-        except Exception:
-            continue
-    
-    return results
+    logger.warning("GROQ_API_KEY is missing. Cannot fetch trending movies.")
+    return []
 
 @api_router.get("/geolocation", response_model=GeolocationResponse)
 async def get_geolocation():
