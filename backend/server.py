@@ -14,7 +14,7 @@ from openai import AsyncOpenAI
 import re
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / '.env', override=True)
 
 # OMDb Configuration
 OMDB_API_KEY = os.environ.get('OMDB_API_KEY')
@@ -474,7 +474,63 @@ async def get_trending():
     Get dynamic trending movies using TMDB (if available) or randomly from OMDb pool.
     """
     try:
-        # 1. 🌟 Strategy A: TMDB Trending Endpoint
+        # 1. 🚀 Strategy A: Groq AI Real-Time Trending (Highly Dynamic)
+        if GROQ_API_KEY:
+            logger.info("Attempting Groq AI for trending movies")
+            client = AsyncOpenAI(
+                api_key=GROQ_API_KEY,
+                base_url="https://api.groq.com/openai/v1"
+            )
+            
+            prompt = """You are an elite cinema engine. Your task is to provide the absolute top 10 most popular, trending, and highly discussed movies globally right now (this week). 
+Mix massive new blockbusters, critically acclaimed recent releases, and viral hits.
+
+CRITICAL INSTRUCTION: You MUST respond ONLY with a raw comma-separated list of EXACT IMDb IDs (e.g. tt1234567,tt7654321). 
+Do NOT include any text, titles, or explanations. Just the raw comma-separated IDs."""
+
+            chat_completion = await client.chat.completions.create(
+                messages=[{"role": "system", "content": prompt}],
+                model="llama3-8b-8192",
+                temperature=0.8,
+            )
+            
+            response_text = chat_completion.choices[0].message.content.strip()
+            ai_imdb_ids = re.findall(r'tt\d+', response_text)
+            
+            if ai_imdb_ids:
+                logger.info(f"Groq AI trending suggested IDs: {ai_imdb_ids}")
+                
+                async def fetch_ai_trending(rec_id):
+                    try:
+                        data = await omdb_request({"i": rec_id})
+                        if data.get('Response') != 'False' and data.get('Poster') and data.get('Poster') != 'N/A':
+                            vote_average = None
+                            if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
+                                try: vote_average = float(data['imdbRating'])
+                                except: pass
+                            
+                            return MovieSearchResult(
+                                id=data['imdbID'],
+                                title=data.get('Title', ''),
+                                release_date=data.get('Year')[:4] if data.get('Year') else None,
+                                poster_path=data.get('Poster'),
+                                vote_average=vote_average,
+                                overview=data.get('Plot') if data.get('Plot') != 'N/A' else ""
+                            )
+                    except: pass
+                    return None
+
+                ai_tasks = [fetch_ai_trending(rec_id) for rec_id in list(dict.fromkeys(ai_imdb_ids))]
+                ai_results = await asyncio.gather(*ai_tasks)
+                
+                valid_results = [r for r in ai_results if r]
+                if len(valid_results) >= 5:
+                    return valid_results[:10]
+    except Exception as e:
+        logger.error(f"Groq AI Trending failed, falling back to TMDB: {e}")
+
+    try:
+        # 2. 🌟 Strategy B: TMDB Trending Endpoint
         if TMDB_API_KEY:
             logger.info("Fetching trending movies from TMDB")
             trending_data = await tmdb_request("/trending/movie/day")
