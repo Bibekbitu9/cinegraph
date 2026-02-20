@@ -4,8 +4,9 @@ import { Star, Calendar } from 'lucide-react';
 
 function MovieCard({ movie, onClick }) {
   // Use backend proxy for images to bypass CORS restrictions
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || (typeof window !== 'undefined' ? window.location.origin : '');
   const proxyUrl = movie.poster_path
-    ? `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api/proxy-image?url=${encodeURIComponent(movie.poster_path)}`
+    ? `${BACKEND_URL}/api/proxy-image?url=${encodeURIComponent(movie.poster_path)}`
     : 'https://via.placeholder.com/300x450/0A0A0C/7C3AED?text=No+Poster';
 
   const [imgSrc, setImgSrc] = React.useState(proxyUrl);
