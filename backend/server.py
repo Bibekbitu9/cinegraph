@@ -304,33 +304,33 @@ async def get_recommendations(movie_id: str):
         # Language-specific curated pools
         language_pools = {
             'hi': {  # Hindi/Bollywood
-                "Action": ["tt8178634", "tt15354916", "tt7019842", "tt13751694", "tt12844910"],  # RRR, Jawan, Pathaan, KGF2, Pushpa
-                "Drama": ["tt1187043", "tt0169102", "tt5074352", "tt2338151", "tt23849204"],  # 3 Idiots, Lagaan, Dangal, PK, 12th Fail
-                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470", "tt2283748"],  # 3 Idiots, Munna Bhai, Andhadhun, Queen, Vicky Donor
-                "Crime": ["tt6148156", "tt1821480", "tt10280296", "tt8108202", "tt7838252"],  # Gangs of Wasseypur, Andhadhun, Sacred Games, Mirzapur, Article 15
-                "Romance": ["tt1039928", "tt0367110", "tt0871510", "tt1954470", "tt0367495"]  # YJHD, Kal Ho Naa Ho, Jab We Met, Queen, DDLJ
+                "Action": ["tt8178634", "tt15354916", "tt7019842", "tt13751694", "tt12844910", "tt29598642"],  # Fighter etc
+                "Drama": ["tt1187043", "tt0169102", "tt5074352", "tt2338151", "tt23849204", "tt10366206"],  
+                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470", "tt2283748"],
+                "Crime": ["tt6148156", "tt1821480", "tt10280296", "tt8108202", "tt7838252"],
+                "Romance": ["tt1039928", "tt0367110", "tt0871510", "tt1954470", "tt26047818"] 
             },
             'ta': {  # Tamil
-                "Action": ["tt9179430", "tt15097216", "tt9900782", "tt7019842", "tt8178634"],  # Vikram, Leo, Jailer, Pathaan, RRR
-                "Drama": ["tt10189514", "tt8108274", "tt1821480", "tt5074352", "tt0169102"],  # Jai Bhim, Soorarai Pottru, Andhadhun, Dangal, Lagaan
-                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470", "tt2283748"]
+                "Action": ["tt9179430", "tt15097216", "tt9900782", "tt7019842", "tt8178634"],  
+                "Drama": ["tt10189514", "tt8108274", "tt1821480", "tt5074352", "tt0169102"],  
+                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470"]
             },
             'te': {  # Telugu
-                "Action": ["tt8178634", "tt4849438", "tt12844910", "tt7019842", "tt13751694"],  # RRR, Baahubali, Pushpa, Pathaan, KGF2
+                "Action": ["tt8178634", "tt4849438", "tt12844910", "tt7019842", "tt13751694"],  
                 "Drama": ["tt8178634", "tt4849438", "tt5074352", "tt0169102", "tt1187043"],
-                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470", "tt2283748"]
+                "Comedy": ["tt1187043", "tt1620933", "tt1821480", "tt1954470"]
             },
             'kn': {  # Kannada
-                "Action": ["tt13751694", "tt12844910", "tt8178634", "tt7019842", "tt15354916"],  # KGF series, RRR, Pathaan, Jawan
+                "Action": ["tt13751694", "tt12844910", "tt8178634", "tt7019842", "tt15354916"],  
                 "Drama": ["tt13751694", "tt5074352", "tt0169102", "tt1187043", "tt2338151"]
             },
             'en': {  # English/Hollywood
-                "Action": ["tt0468569", "tt1375666", "tt0816692", "tt4154796", "tt10872600"],  # Dark Knight, Inception, Interstellar, Avengers, Spider-Man
-                "Drama": ["tt0111161", "tt0068646", "tt0110912", "tt0137523", "tt0109830"],  # Shawshank, Godfather, Pulp Fiction, Fight Club, Forrest Gump
-                "Sci-Fi": ["tt0133093", "tt1375666", "tt0816692", "tt0167260", "tt0468569"],  # Matrix, Inception, Interstellar, LOTR, Dark Knight
-                "Comedy": ["tt0332280", "tt0113243", "tt0081505", "tt1201607", "tt0110413"],  # Notebook, Braveheart, Raiders, Harry Potter, Leon
-                "Crime": ["tt0068646", "tt0110912", "tt0468569", "tt0102926", "tt0114709"],  # Godfather, Pulp Fiction, Dark Knight, Silence, Se7en
-                "Animation": ["tt6718170", "tt1323594", "tt0435625", "tt3104988", "tt0462499"]  # Spider-Verse, Toy Story, Ratatouille, Coco, Up
+                "Action": ["tt1745960", "tt10366206", "tt9603212", "tt1877830", "tt15398776", "tt0468569", "tt1375666", "tt4154796", "tt10872600"],  # Top Gun, John Wick 4, MI7, The Batman, Oppenheimer...
+                "Drama": ["tt15398776", "tt5537002", "tt13238346", "tt13833688", "tt0111161", "tt0068646", "tt0110912", "tt0137523", "tt0109830"],  # Oppenheimer, Killers of the Flower Moon, Past Lives, The Whale...
+                "Sci-Fi": ["tt15239678", "tt1630029", "tt11858890", "tt23289160", "tt0133093", "tt1375666", "tt0816692", "tt0167260"],  # Dune 2, Avatar 2, The Creator, Godzilla Minus One...
+                "Comedy": ["tt1517268", "tt14230458", "tt26047818", "tt11564570", "tt0332280", "tt0081505", "tt1201607"],  # Barbie, Poor Things, Anyone But You, Glass Onion...
+                "Crime": ["tt1877830", "tt0068646", "tt0110912", "tt0468569", "tt0102926", "tt0114709"],  # The Batman, Godfather, Pulp Fiction...
+                "Animation": ["tt3104988", "tt9362722", "tt6718170", "tt1323594", "tt0435625", "tt0462499", "tt11145118"]  # Inside Out 2, Spider-Verse 2, Spider-Verse 1, Toy Story...
             }
         }
 
@@ -368,7 +368,7 @@ async def get_recommendations(movie_id: str):
                             overview=data.get('Plot') if data.get('Plot') != 'N/A' else ""
                         )
                 except: continue
-                if len(results_map) >= 10: break
+                if len(results_map) >= 12: break
 
         logger.info(f"Returning {len(results_map)} {detected_lang} language-based recommendations from OMDb")
         return list(results_map.values())
@@ -429,13 +429,13 @@ async def get_trending():
     except Exception as e:
         logger.error(f"TMDB Trending failed, falling back to OMDb pool: {e}")
 
-    # 2. ⚡ Strategy B: Randomized OMDb Fallback Pool (Mix of Global & Indian hits)
+    # 2. ⚡ Strategy B: Randomized OMDb Fallback Pool (Recent 2023-2024 Global & Indian hits)
     import random
     all_movie_ids = [
-        "tt15354916", "tt12844910", "tt13751694", "tt23849204", "tt15398776", "tt1517268", # Jawan, Pathaan, Animal, 12th Fail, Oppenheimer, Barbie
-        "tt15239678", "tt0468569",  "tt1375666",  "tt0816692",  "tt4154796",  "tt6718170", # Dune 2, Dark Knight, Inception, Interstellar, Avengers, Spider-Verse
-        "tt8178634",  "tt1187043",  "tt5074352",  "tt10189514", "tt1821480",  "tt0111161", # RRR, 3 Idiots, Dangal, Jai Bhim, Andhadhun, Shawshank
-        "tt0068646",  "tt0110912",  "tt10872600", "tt9362722",  "tt2906216",  "tt4633694"  # Godfather, Pulp Fiction, Spider-Man, Spider-Verse 2
+        "tt15239678", "tt15398776", "tt1517268", "tt11145118", "tt10366206", "tt9603212", # Dune 2, Oppenheimer, Barbie, Inside Out 2, John Wick 4, MI7
+        "tt1630029", "tt9362722", "tt14230458", "tt11858890", "tt23289160", "tt15354916", # Avatar 2, Spider-Verse 2, Poor Things, Creator, Godzilla Minus One, Jawan
+        "tt12844910", "tt13751694", "tt23849204", "tt29598642", "tt10872600", "tt1745960", # Pathaan, Animal, 12th Fail, Fighter, No Way Home, Top Gun Maverick
+        "tt11564570", "tt26047818", "tt5537002", "tt13238346", "tt13833688", "tt10189514"  # Glass Onion, Anyone But You, Killers Flower Moon, Past Lives, The Whale, Jai Bhim
     ]
     
     selected_ids = random.sample(all_movie_ids, 8)
