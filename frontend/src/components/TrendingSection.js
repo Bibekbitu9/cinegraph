@@ -5,7 +5,7 @@ import MovieCard from './MovieCard';
 import MovieDetailModal from './MovieDetailModal';
 import { TrendingUp } from 'lucide-react';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = `${BACKEND_URL}/api`;
 
 function TrendingSection({ userCountry }) {

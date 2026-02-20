@@ -5,7 +5,7 @@ import { X, Star, Calendar, Clock, PlayCircle, MapPin, TrendingUp } from 'lucide
 import { Button } from './ui/button';
 import { useNavigate } from 'react-router-dom';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = `${BACKEND_URL}/api`;
 
 function MovieDetailModal({ movieId, isOpen, onClose, userCountry }) {
