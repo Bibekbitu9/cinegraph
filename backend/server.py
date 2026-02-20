@@ -394,34 +394,61 @@ async def get_streaming_availability(movie_id: str, country: str = "US"):
 @api_router.get("/trending", response_model=List[MovieSearchResult])
 async def get_trending():
     """
-    Get trending movies.
-    NOTE: OMDb does not support trending. Fetching actual data from OMDb API for popular movies.
+    Get dynamic trending movies using TMDB (if available) or randomly from OMDb pool.
     """
-    # List of popular movie IMDb IDs (Global + Indian)
-    movie_ids = [
-        "tt15354916",  # Jawan
-        "tt12844910",  # Pathaan
-        "tt13751694",  # Animal
-        "tt23849204",  # 12th Fail
-        "tt15398776",  # Oppenheimer
-        "tt1517268",   # Barbie
-        "tt15239678",  # Dune: Part Two
+    try:
+        # 1. 🌟 Strategy A: TMDB Trending Endpoint
+        if TMDB_API_KEY:
+            logger.info("Fetching trending movies from TMDB")
+            trending_data = await tmdb_request("/trending/movie/day")
+            
+            if trending_data and trending_data.get('results'):
+                movies_to_process = trending_data['results'][:12]
+                
+                async def fetch_movie_with_imdb(movie):
+                    ids_data = await tmdb_request(f"/movie/{movie['id']}/external_ids")
+                    imdb_id = ids_data.get('imdb_id') if ids_data else None
+                    if imdb_id:
+                        return MovieSearchResult(
+                            id=imdb_id,
+                            title=movie.get('title', ''),
+                            release_date=movie.get('release_date', '')[:4] if movie.get('release_date') else None,
+                            poster_path=f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get('poster_path') else None,
+                            vote_average=movie.get('vote_average'),
+                            overview=movie.get('overview') or ""
+                        )
+                    return None
+
+                tasks = [fetch_movie_with_imdb(m) for m in movies_to_process]
+                results_list = await asyncio.gather(*tasks)
+                results = [r for r in results_list if r]
+                
+                if results:
+                    return results
+
+    except Exception as e:
+        logger.error(f"TMDB Trending failed, falling back to OMDb pool: {e}")
+
+    # 2. ⚡ Strategy B: Randomized OMDb Fallback Pool (Mix of Global & Indian hits)
+    import random
+    all_movie_ids = [
+        "tt15354916", "tt12844910", "tt13751694", "tt23849204", "tt15398776", "tt1517268", # Jawan, Pathaan, Animal, 12th Fail, Oppenheimer, Barbie
+        "tt15239678", "tt0468569",  "tt1375666",  "tt0816692",  "tt4154796",  "tt6718170", # Dune 2, Dark Knight, Inception, Interstellar, Avengers, Spider-Verse
+        "tt8178634",  "tt1187043",  "tt5074352",  "tt10189514", "tt1821480",  "tt0111161", # RRR, 3 Idiots, Dangal, Jai Bhim, Andhadhun, Shawshank
+        "tt0068646",  "tt0110912",  "tt10872600", "tt9362722",  "tt2906216",  "tt4633694"  # Godfather, Pulp Fiction, Spider-Man, Spider-Verse 2
     ]
     
-    # Fetch each movie from OMDb API
+    selected_ids = random.sample(all_movie_ids, 8)
+    
     results = []
-    for imdb_id in movie_ids:
+    for imdb_id in selected_ids:
         try:
             data = await omdb_request({"i": imdb_id})
-            
             if data.get('Response') != 'False':
-                # Parse rating
                 vote_average = None
                 if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
-                    try:
-                        vote_average = float(data['imdbRating'])
-                    except:
-                        pass
+                    try: vote_average = float(data['imdbRating'])
+                    except: pass
                 
                 results.append(MovieSearchResult(
                     id=data['imdbID'],
@@ -431,9 +458,7 @@ async def get_trending():
                     vote_average=vote_average,
                     overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
                 ))
-        except Exception as e:
-            # Skip movies that fail to load
-            logger.error(f"Failed to fetch movie {imdb_id}: {e}")
+        except Exception:
             continue
     
     return results
