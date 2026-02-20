@@ -149,7 +149,7 @@ async def search_movies(query: str = Query(..., min_length=1)):
             client = AsyncOpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
             prompt = f"User searched for movies related to: '{query}'. Provide the top 10 best matching films in cinematic history. Combine exact matches and strong thematic matches. CRITICAL INSTRUCTION: You MUST respond ONLY with a raw comma-separated list of EXACT IMDb IDs (e.g. tt1234567,tt7654321). No text, no titles, no markdown."
             chat_completion = await client.chat.completions.create(
-                messages=[{"role": "system", "content": prompt}], model="llama3-8b-8192", temperature=0.5
+                messages=[{"role": "system", "content": prompt}], model="llama-3.3-70b-versatile", temperature=0.5
             )
             response_text = chat_completion.choices[0].message.content.strip()
             ai_imdb_ids = re.findall(r'tt\d+', response_text)
@@ -260,7 +260,7 @@ Do NOT include any conversational text, no movies titles, no explanations, no JS
                                     "content": prompt
                                 }
                             ],
-                            model="llama3-8b-8192",
+                            model="llama-3.3-70b-versatile",
                             temperature=0.7,
                         )
                         
@@ -345,12 +345,14 @@ Do NOT include any text, titles, or explanations. Just the raw comma-separated I
 
             chat_completion = await client.chat.completions.create(
                 messages=[{"role": "system", "content": prompt}],
-                model="llama3-8b-8192",
+                model="llama-3.3-70b-versatile",
                 temperature=0.8,
             )
             
             response_text = chat_completion.choices[0].message.content.strip()
+            logger.info(f"Groq Raw Response: {response_text}")
             ai_imdb_ids = re.findall(r'tt\d+', response_text)
+            logger.info(f"Extracted IDs: {ai_imdb_ids}")
             
             if ai_imdb_ids:
                 logger.info(f"Groq AI trending suggested IDs: {ai_imdb_ids}")
