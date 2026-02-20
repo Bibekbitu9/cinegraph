@@ -427,9 +427,50 @@ async def get_trending():
                     return results
 
     except Exception as e:
-        logger.error(f"TMDB Trending failed, falling back to OMDb pool: {e}")
+        logger.error(f"TMDB Trending failed, falling back to iTunes RSS: {e}")
 
-    # 2. ⚡ Strategy B: Randomized OMDb Fallback Pool (Recent 2023-2024 Global & Indian hits)
+    # 2. ⚡ Strategy B: Real-Time iTunes Top Movies RSS API (No API Key Required)
+    try:
+        logger.info("Fetching real-time top movies from iTunes RSS")
+        response = await http_client.get("https://itunes.apple.com/us/rss/topmovies/limit=25/json", timeout=5.0)
+        if response.status_code == 200:
+            itunes_data = response.json()
+            entries = itunes_data.get('feed', {}).get('entry', [])
+            titles = [entry.get('im:name', {}).get('label') for entry in entries if entry.get('im:name')]
+            
+            async def fetch_movie_with_omdb(title):
+                try:
+                    data = await omdb_request({"t": title})
+                    if data and data.get('Response') != 'False' and data.get('Poster') and data.get('Poster') != 'N/A':
+                        vote_average = None
+                        if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
+                            try: vote_average = float(data['imdbRating'])
+                            except: pass
+                        return MovieSearchResult(
+                            id=data['imdbID'],
+                            title=data.get('Title', title),
+                            release_date=data.get('Year')[:4] if data.get('Year') else None,
+                            poster_path=data.get('Poster'),
+                            vote_average=vote_average,
+                            overview=data.get('Plot') if data.get('Plot') != 'N/A' else None
+                        )
+                except Exception:
+                    pass
+                return None
+            
+            tasks = [fetch_movie_with_omdb(title) for title in titles]
+            results_list = await asyncio.gather(*tasks)
+            results = [r for r in results_list if r]
+            
+            if len(results) >= 4:
+                import random
+                # Slightly randomize the top hits to keep the site feeling dynamic
+                random.shuffle(results)
+                return results[:10]
+    except Exception as e:
+        logger.error(f"iTunes RSS scrape failed, falling back to static pool: {e}")
+
+    # 3. ⚡ Strategy C: Randomized OMDb Fallback Pool (Recent 2023-2024 Global & Indian hits)
     import random
     all_movie_ids = [
         "tt15239678", "tt15398776", "tt1517268", "tt11145118", "tt10366206", "tt9603212", # Dune 2, Oppenheimer, Barbie, Inside Out 2, John Wick 4, MI7
