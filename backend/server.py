@@ -10,6 +10,8 @@ import httpx
 import time
 import json
 import asyncio
+from openai import AsyncOpenAI
+import re
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -22,6 +24,8 @@ OMDB_BASE_URL = "http://www.omdbapi.com"
 TMDB_API_KEY = os.environ.get('TMDB_API_KEY')
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
+# Groq AI Configuration
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 
 # Simple in-memory cache
 cache = {}
@@ -210,7 +214,80 @@ async def get_recommendations(movie_id: str):
     try:
         logger.info(f"Fetching recommendations for movie_id: {movie_id}")
         
-        # 1. 🌟 Strategy A: Try TMDB Recommendations first (Language-Aware)
+        # 1. 🚀 Strategy A: Groq AI Recommendations (Highly Contextual)
+        if GROQ_API_KEY:
+            logger.info("Attempting Groq AI recommendation strategy")
+            try:
+                # Need source movie details to prompt the AI
+                source_data = await omdb_request({"i": movie_id})
+                if source_data.get('Response') != 'False':
+                    title = source_data.get('Title', '')
+                    genre = source_data.get('Genre', '')
+                    plot = source_data.get('Plot', '')
+                    
+                    if title:
+                        client = AsyncOpenAI(
+                            api_key=GROQ_API_KEY,
+                            base_url="https://api.groq.com/openai/v1"
+                        )
+                        
+                        prompt = f"""You are an elite cinema recommendation engine. I am a user who just finished watching the movie '{title}' (Genres: {genre}, Plot summary: {plot}). 
+Your task is to recommend exactly 12 incredible, highly similar companion films that capture the precise mood, cinematic style, pacing, and core thematic concepts of '{title}'. 
+DO NOT just match basic genres, focus heavily on the 'vibe'. Combine popular hits with hidden gems.
+
+CRITICAL INSTRUCTION: You MUST respond ONLY with a raw comma-separated list of EXACT IMDb IDs (e.g. tt1234567,tt7654321). 
+Do NOT include any conversational text, no movies titles, no explanations, no JSON formatting, no markdown, no quotes. Just the raw comma-separated IDs."""
+
+                        chat_completion = await client.chat.completions.create(
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": prompt
+                                }
+                            ],
+                            model="llama3-8b-8192",
+                            temperature=0.7,
+                        )
+                        
+                        response_text = chat_completion.choices[0].message.content.strip()
+                        ai_imdb_ids = re.findall(r'tt\d+', response_text)
+                        
+                        if ai_imdb_ids:
+                            logger.info(f"Groq AI highly contextual suggested IDs: {ai_imdb_ids}")
+                            results_map = {}
+                            
+                            async def fetch_ai_recommendation(rec_id):
+                                if rec_id == movie_id: return None
+                                try:
+                                    data = await omdb_request({"i": rec_id})
+                                    if data.get('Response') != 'False' and data.get('Poster') and data.get('Poster') != 'N/A':
+                                        vote_average = None
+                                        if data.get('imdbRating') and data.get('imdbRating') != 'N/A':
+                                            try: vote_average = float(data['imdbRating'])
+                                            except: pass
+                                        
+                                        return MovieSearchResult(
+                                            id=data['imdbID'],
+                                            title=data.get('Title', ''),
+                                            release_date=data.get('Year')[:4] if data.get('Year') else None,
+                                            poster_path=data.get('Poster'),
+                                            vote_average=vote_average,
+                                            overview=data.get('Plot') if data.get('Plot') != 'N/A' else ""
+                                        )
+                                except: pass
+                                return None
+
+                            # Fetch all AI recommendations concurrently
+                            ai_tasks = [fetch_ai_recommendation(rec_id) for rec_id in list(dict.fromkeys(ai_imdb_ids))]
+                            ai_results = await asyncio.gather(*ai_tasks)
+                            
+                            valid_results = [r for r in ai_results if r]
+                            if len(valid_results) >= 4:
+                                return valid_results[:10]
+            except Exception as e:
+                logger.error(f"Groq AI Recommendations failed, falling back to TMDB/OMDB: {e}")
+
+        # 2. 🌟 Strategy B: Try TMDB Recommendations first (Language-Aware)
         if TMDB_API_KEY:
             logger.info("Attempting TMDB recommendation strategy")
             # Map IMDb ID -> TMDB ID
